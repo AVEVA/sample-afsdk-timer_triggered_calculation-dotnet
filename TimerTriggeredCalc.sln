@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30907.101
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimerTriggeredCalc", "TimerTriggeredCalc\TimerTriggeredCalc.csproj", "{502B16B7-99E5-4B94-9769-D6E7FCDB15AA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{502B16B7-99E5-4B94-9769-D6E7FCDB15AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{502B16B7-99E5-4B94-9769-D6E7FCDB15AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{502B16B7-99E5-4B94-9769-D6E7FCDB15AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{502B16B7-99E5-4B94-9769-D6E7FCDB15AA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {5EE8E750-5EC1-4B2F-8225-64B4CCC3D279}
+	EndGlobalSection
+EndGlobal
