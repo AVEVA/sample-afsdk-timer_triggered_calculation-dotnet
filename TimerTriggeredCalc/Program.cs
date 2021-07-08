@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Timers;
-using System.Threading.Tasks;
+using OSIsoft.AF.Asset;
+using OSIsoft.AF.Data;
 using OSIsoft.AF.PI;
 
 namespace TimerTriggeredCalc
@@ -12,15 +11,15 @@ namespace TimerTriggeredCalc
     {
         private static Timer aTimer;
         private static PIPoint output;
-        private static IList<PIPoint> inputList;
+        private static PIPoint input;
 
         public static void Main(string[] args)
         {
             #region configuration
 
             var inputTagName = "cdt158";
-            var outputTagName = "cdt158_output_eventbased";
-            var timerMS = 5000; // how long to pause between cycles, in ms
+            var outputTagName = "cdt158_output_timerbased";
+            var timerMS = 60000; // how long to pause between cycles, in ms
 
             #endregion // configuration
 
@@ -35,38 +34,86 @@ namespace TimerTriggeredCalc
             catch (PIPointInvalidException)
             {
                 output = myServer.CreatePIPoint(outputTagName);
-                output.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float32);
+                output.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float64);
             }
 
-            // List to hold the PIPoint objects that we will use as inputs
-            var nameList = new List<string>
-            {
-                inputTagName
-            };
-
-            inputList = PIPoint.FindPIPoints(myServer, nameList);
+            // Resolve input tag name to PIPoint object
+            input = PIPoint.FindPIPoint(myServer, inputTagName);
 
             // Create a timer with the specified interval
             aTimer = new Timer();
             aTimer.Interval = timerMS;
 
-            // Hook up the Elapsed event for the timer.
+            // Add the calculation to the timer's elapsed trigger event handler list
             aTimer.Elapsed += PerformCalculation;
 
+            // Enable the timer and have it reset on each trigger
             aTimer.AutoReset = true;
-
             aTimer.Enabled = true;
 
-            Console.WriteLine("Press the Enter key to exit the program at any time... ");
+            // Allow the program to run indefinitely
+            Console.WriteLine($"Calculations are executing every {timerMS} ms. Press <ENTER> to end... ");
             Console.ReadLine();
 
         }
 
         private static void PerformCalculation(object source, ElapsedEventArgs e)
         {
-            foreach (var input in inputList)
+            // Configuration
+            var numValues = 100;  // number of values to find the average of
+            var numStDevs = 1.75; // number of standard deviations of variance to allow
+
+            // Obtain the recent values from the trigger timestamp
+            var afvals = input.RecordedValuesByCount(e.SignalTime, numValues, false, AFBoundaryType.Interpolated, null, false);
+
+            // Remove bad values
+            var badItems = new List<AFValue>();
+            foreach (var afval in afvals)
+                if (!afval.IsGood)
+                    badItems.Add(afval);
+
+            foreach (var item in badItems)
+                afvals.Remove(item);
+
+            // Loop until no new values were eliminated for being outside of the boundaries
+            while (true)
             {
-                Console.WriteLine($"Calculation performed on {input.Name} at time of {e.SignalTime.ToLocalTime()}, writing to {output.Name}");
+                // Calculate the mean
+                var total = 0.0;
+                foreach (var afval in afvals)
+                    total += afval.ValueAsDouble();
+
+                var avg = total / (double)afvals.Count;
+
+                // Calculate the st dev
+                var totalSquareVariance = 0.0;
+                foreach (var afval in afvals)
+                    totalSquareVariance += Math.Pow(afval.ValueAsDouble() - avg, 2);
+
+                var avgSqDev = totalSquareVariance / (double)afvals.Count;
+                var stdev = Math.Sqrt(avgSqDev);
+
+                // Determine the values outside of the boundaries
+                var cutoff = stdev * numStDevs;
+                var itemsToRemove = new List<AFValue>();
+
+                foreach (var afval in afvals)
+                    if (Math.Abs(afval.ValueAsDouble() - avg) > cutoff)
+                        itemsToRemove.Add(afval);
+
+                // If there are items to remove, remove them and loop again
+                if (itemsToRemove.Count > 0)
+                {
+                    foreach (var item in itemsToRemove)
+                        afvals.Remove(item);
+                }
+                // If not, write the average to the output tag and break the loop
+                else
+                {
+                    output.UpdateValue(new AFValue(avg, e.SignalTime), AFUpdateOption.Insert);
+                    break;
+                }
+
             }
         }
     }
