@@ -115,7 +115,12 @@ namespace TimerTriggeredCalc
                     total += afval.ValueAsDouble();
                 }
 
-                var avg = total / (double)afvals.Count;
+                var avg = 0.0;
+
+                if (total != 0.0) // prevents division by zero
+                {
+                    avg = total / afvals.Count;
+                }
 
                 // Calculate the st dev
                 var totalSquareVariance = 0.0;
