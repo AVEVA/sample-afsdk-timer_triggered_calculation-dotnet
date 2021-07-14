@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.30907.101
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimerTriggeredCalc", "TimerTriggeredCalc\TimerTriggeredCalc.csproj", "{502B16B7-99E5-4B94-9769-D6E7FCDB15AA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimerTriggeredCalcTests", "UnitTestProject1\TimerTriggeredCalcTests.csproj", "{079EBD78-FBFE-40AA-A77C-75FCC5261C27}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimerTriggeredCalcTests", "TimerTriggeredCalcTests\TimerTriggeredCalcTests.csproj", "{079EBD78-FBFE-40AA-A77C-75FCC5261C27}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

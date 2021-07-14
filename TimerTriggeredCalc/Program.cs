@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Timers;
 using OSIsoft.AF.Asset;
 using OSIsoft.AF.Data;
@@ -24,7 +22,6 @@ namespace TimerTriggeredCalc
         public static bool MainLoop(bool test = false)
         {
             #region configuration
-
             var inputTagName = "cdt158";
             var outputTagName = "cdt158_output_timerbased";
             var timerMS = 60000; // how long to pause between cycles, in ms
@@ -32,8 +29,14 @@ namespace TimerTriggeredCalc
 
             #endregion // configuration
 
-            // Get default PI Data Archive
+            // Get PI Data Archive object
+
+            // Default server
             var myServer = PIServers.GetPIServers().DefaultPIServer;
+
+            // Named server
+            // var dataArchiveName = "PISRV01";
+            // var myServer = PIServers.GetPIServers()[dataArchiveName];
 
             // Get or create the output PI Point
             try
@@ -61,11 +64,14 @@ namespace TimerTriggeredCalc
             _aTimer.Interval = timerMS;
 
             // Add the calculation to the timer's elapsed trigger event handler list
-            _aTimer.Elapsed += PerformCalculation;
+            _aTimer.Elapsed += TriggerCalculation;
 
             // Enable the timer and have it reset on each trigger
             _aTimer.AutoReset = true;
             _aTimer.Enabled = true;
+
+            // Once the timer is set up, trigger the calculation manually to not wait a full timer cycle
+            PerformCalculation(DateTime.Now);
 
             // Allow the program to run indefinitely if not being tested
             if (!test)
@@ -82,69 +88,55 @@ namespace TimerTriggeredCalc
             return true;
         }
 
-        private static void PerformCalculation(object source, ElapsedEventArgs e)
+        private static void TriggerCalculation(object source, ElapsedEventArgs e)
         {
+            PerformCalculation(e.SignalTime);
+        }
+
+        private static void PerformCalculation(DateTime triggerTime)
+        { 
             // Configuration
             var numValues = 100;  // number of values to find the average of
             var numStDevs = 1.75; // number of standard deviations of variance to allow
 
             // Obtain the recent values from the trigger timestamp
-            var afvals = _input.RecordedValuesByCount(e.SignalTime, numValues, false, AFBoundaryType.Interpolated, null, false);
+            var afvals = _input.RecordedValuesByCount(triggerTime, numValues, false, AFBoundaryType.Interpolated, null, false);
 
             // Remove bad values
-            var badItems = new List<AFValue>();
-            foreach (var afval in afvals)
-            {
-                if (!afval.IsGood)
-                {
-                    badItems.Add(afval);
-                }
-            }
-
-            foreach (var item in badItems)
-                afvals.Remove(item);
-
+            afvals.RemoveAll(a => !a.IsGood);
+            
             // Loop until no new values were eliminated for being outside of the boundaries
             while (true)
             {
                 // Calculate the mean
                 var total = 0.0;
                 foreach (var afval in afvals)
+                {
                     total += afval.ValueAsDouble();
+                }
 
                 var avg = total / (double)afvals.Count;
 
                 // Calculate the st dev
                 var totalSquareVariance = 0.0;
                 foreach (var afval in afvals)
+                {
                     totalSquareVariance += Math.Pow(afval.ValueAsDouble() - avg, 2);
+                }
 
                 var avgSqDev = totalSquareVariance / (double)afvals.Count;
                 var stdev = Math.Sqrt(avgSqDev);
 
-                // Determine the values outside of the boundaries
+                // Determine the values outside of the boundaries, and remove them
                 var cutoff = stdev * numStDevs;
-                var itemsToRemove = new List<AFValue>();
+                var startingCount = afvals.Count;
 
-                foreach (var afval in afvals)
-                {
-                    if (Math.Abs(afval.ValueAsDouble() - avg) > cutoff)
-                    {
-                        itemsToRemove.Add(afval);
-                    }
-                }
+                afvals.RemoveAll(a => Math.Abs(a.ValueAsDouble() - avg) > cutoff);
 
-                // If there are items to remove, remove them and loop again
-                if (itemsToRemove.Count > 0)
+                // If no items were removed, output the average and break the loop
+                if (afvals.Count == startingCount)
                 {
-                    foreach (var item in itemsToRemove)
-                        afvals.Remove(item);
-                }
-
-                // If not, write the average to the output tag and break the loop
-                else
-                {
-                    _output.UpdateValue(new AFValue(avg, e.SignalTime), AFUpdateOption.Insert);
+                    _output.UpdateValue(new AFValue(avg, triggerTime), AFUpdateOption.Insert);
                     break;
                 }
             }
