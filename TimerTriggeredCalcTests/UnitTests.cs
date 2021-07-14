@@ -1,14 +1,13 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Xunit;
 
 namespace TimerTriggeredCalcTests
 {
-    [TestClass]
     public class UnitTests
     {
-        [TestMethod]
+        [Fact]
         public void TimerTriggeredCalcTest()
         {
-            Assert.IsTrue(TimerTriggeredCalc.Program.MainLoop(true));
+            Assert.True(TimerTriggeredCalc.Program.MainLoop(true));
         }
     }
 }
