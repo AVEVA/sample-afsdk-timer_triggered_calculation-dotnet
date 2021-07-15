@@ -1,0 +1,69 @@
+trigger:
+  batch: true
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - '/'
+
+pr:
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - '/'
+
+schedules:
+  - cron: '0 0 * * 0'
+    displayName: Weekly build
+    branches:
+      include:
+        - master
+    always: true
+
+variables:
+  - template: '/miscellaneous/build_templates/variables.yml'
+  - name: projPath
+    value: ''
+  - name: CredFile
+    value: ''
+  - name: CredFileLibrary
+    value: ''
+  - name: analysisProject
+    value: PI_AFSDKCustomCalcTimer_DotNet
+  - name: run_import
+    value: false
+  - name: run_delete
+    value: false
+
+jobs:
+  - job: Tests
+    pool:
+      name: 00-OSIManaged-Test
+      demands: COMPUTERNAME -equals $(buildAgent)
+    steps:
+      - template: '/miscellaneous/build_templates/config.yml'
+        parameters:
+          fileOriginal: $(CredFile)
+          fileLibrary: $(CredFileLibrary)
+          filePath: $(projPath)
+
+      - script: |
+          nuget restore
+        workingDirectory: $(Build.SourcesDirectory)$(projPath)
+        displayName: 'nuget restore'
+      - task: DotNetCoreCLI@2
+        displayName: 'Run tests'
+        inputs:
+          command: test
+          arguments: --filter Category=Solution
+          publishTestResults: true
+          testRunTitle: '$(Agent.JobName) on $(imageName)'
+          workingDirectory: $(Build.SourcesDirectory)$(projPath)/
+
+  - template: '/miscellaneous/build_templates/analysis.yml'
+    parameters:
+      language: dotnet
+      copyFile: true
