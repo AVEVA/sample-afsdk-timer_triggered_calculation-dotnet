@@ -36,9 +36,9 @@ variables:
   - name: projPath
     value: ''
   - name: CredFile
-    value: ''
+    value: appsettings.json
   - name: CredFileLibrary
-    value: ''
+    value: product-readiness.afsdk_custom_calc_timer_dotnet.json
   - name: analysisProject
     value: PI_AFSDKCustomCalcTimer_DotNet
   - name: run_import
