@@ -72,7 +72,6 @@ jobs:
         displayName: 'Run tests'
         inputs:
           command: test
-          arguments: --filter Category=Solution
           publishTestResults: true
           testRunTitle: '$(Agent.JobName) on $(imageName)'
           workingDirectory: $(Build.SourcesDirectory)$(projPath)/
