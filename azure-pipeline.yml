@@ -62,13 +62,12 @@ jobs:
           nuget restore
         workingDirectory: $(Build.SourcesDirectory)$(projPath)
         displayName: 'nuget restore'
-      - task: CmdLine@2
-        displayName: 'Build solution'
-        inputs:
-          command: '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"'
-          arguments: TimerTriggeredCalc.sln
-          workingDirectory: $(Build.SourcesDirectory)$(projPath)/
 
+      - script: |
+          "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe" TimerTriggeredCalc.sln
+        workingDirectory: $(Build.SourcesDirectory)$(projPath)/
+          displayName: 'Build solution'
+        
       - task: DotNetCoreCLI@2
         displayName: 'Run tests'
         inputs:
