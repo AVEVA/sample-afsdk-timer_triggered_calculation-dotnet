@@ -79,9 +79,9 @@ jobs:
 
     steps:
     - script: |
-          nuget restore
-        workingDirectory: $(Build.SourcesDirectory)$(projPath)
-        displayName: 'nuget restore'
+        nuget restore
+      workingDirectory: $(Build.SourcesDirectory)$(projPath)
+      displayName: 'nuget restore'
 
     - template: '/miscellaneous/build_templates/analysis.yml@templates'
       parameters:
