@@ -14,11 +14,20 @@ namespace TimerTriggeredCalc
         private static PIPoint _output;
         private static PIPoint _input;
 
+        /// <summary>
+        /// Entry point of the program
+        /// </summary>
         public static void Main()
         {
             var success = MainLoop(false);
         }
 
+        /// <summary>
+        /// This function loops until manually stopped, triggering the calculation event on the prescribed timer.
+        /// If being tested, it stops after the set amount of time
+        /// </summary>
+        /// <param name="test">Whether the function is running a test or not</param>
+        /// <returns>true if successful</returns>
         public static bool MainLoop(bool test = false)
         {
             #region configuration
@@ -88,11 +97,20 @@ namespace TimerTriggeredCalc
             return true;
         }
 
+        /// <summary>
+        /// This function triggers the calculation to be run against the timestamp of the timer event
+        /// </summary>
+        /// <param name="source">The source of the event</param>
+        /// <param name="e">An ElapsedEventArgs object that contains the event data</param>
         private static void TriggerCalculation(object source, ElapsedEventArgs e)
         {
             PerformCalculation(e.SignalTime);
         }
 
+        /// <summary>
+        /// This function performs the calculation and writes the value to the output tag
+        /// </summary>
+        /// <param name="triggerTime">The timestamp to perform the calculation against</param>
         private static void PerformCalculation(DateTime triggerTime)
         { 
             // Configuration
