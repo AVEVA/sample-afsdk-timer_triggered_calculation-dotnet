@@ -35,7 +35,7 @@ namespace TimerTriggeredCalc
             var outputTagName = "cdt158_output_timerbased";
             var timerMS = 60 * 1000; // how long to pause between cycles, in ms
             var defineOffsetSeconds = true; // start the calculation at a particular offset number of seconds, regardless of start time of executable
-            var offsetSeconds = 10; // number of seconds to offset from the top of the minute
+            var offsetSeconds = 0; // number of seconds to offset from the top of the minute
 
             #endregion // configuration
 
