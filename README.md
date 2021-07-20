@@ -13,26 +13,26 @@ Previously, this use case was handled by either PI Advanced Calculation Engine (
 
 ## Calculation Work Flow
 
-The sample code is intended to provide a starting point that matches the feel of a timer-triggered ACE calculation executing every minute on the minute.
+The sample code is intended to provide a starting point that matches the feel of a `periodic` ACE calculation executing every minute on the minute.
 
 1. A connection is made to the default Data Archive
     1. Optionally this can be a named Data Archive
     1. The connection is made implicitly under the identity of the account executing the code
 1. The output PI point is resolved, and is created if it does not exist
 1. The input PI point is resolved
-1. The code pauses until the top of the next minute so all execution times will be at :00.
+1. The code pauses until the top of the next minute so all execution times will be at :00
 1. A [System.Timers.Timer](https://docs.microsoft.com/en-us/dotnet/api/system.timers.timer?view=netframework-4.8) object is configured to trigger the calculation every minute
-1. The calculation is triggered manually to start the cycle.
-1. The code loops indefinitely until the user hits `ENTER`
+    1. Since the timer waits for an entire cycle before triggering, the first calculation is explicitly called once the timer object is set up
+1. The code pauses, allowing the timer object to continually trigger the calculation every minute, until the user hits `ENTER`
 
 The calculation logic itself is not the main purpose of the sample, but it demonstrates a complex, conditional, looping calculation that is beyond the functionality of Asset Analytics.
 
-1. A [RecordedValuesByCount](https://docs.osisoft.com/bundle/af-sdk/page/html/M_OSIsoft_AF_PI_PIPoint_RecordedValuesByCount.htm) call returns the 100 most recent values for the tag, backwards in time from the triggering timestamp.
-1. Bad values are removed from the [AFValues](https://docs.osisoft.com/bundle/af-sdk/page/html/T_OSIsoft_AF_Asset_AFValues.htm) object.
+1. A [RecordedValuesByCount](https://docs.osisoft.com/bundle/af-sdk/page/html/M_OSIsoft_AF_PI_PIPoint_RecordedValuesByCount.htm) call returns the 100 most recent values for the tag, backwards in time from the triggering timestamp
+1. Bad values are removed from the [AFValues](https://docs.osisoft.com/bundle/af-sdk/page/html/T_OSIsoft_AF_Asset_AFValues.htm) object
 1. Looping indefinitely:
     1. The standard deviation of the list of remaining values is determined
     1. Any value outside of 1.75 standard deviations is eliminated
-1. Once no new values are eliminated, the average of the remaining values is written to the output tag with a timestamp of the trigger time.
+1. Once no new values are eliminated, the average of the remaining values is written to the output tag with a timestamp of the trigger time
 
 
 ## Prerequisites
@@ -40,6 +40,7 @@ The calculation logic itself is not the main purpose of the sample, but it demon
 - The AF SDK and corresponding minimum version of .NET Framework must be installed on any machine executing this code  
 Note: This sample uses `AF SDK 2.10.9` and `.NET Framework 4.8`. Older versions of the AF SDK may require code changes.
 - A Data Archive that is accessable from the machine executing this code
+    - The unit test, as written, requires CDT158 to exist on this Data Archive
 - The account executing the code must have a mapping for an identity with permissions to:
     - Read data from the input tag(s)
     - Write data to the output tag(s)

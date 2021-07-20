@@ -33,7 +33,7 @@ namespace TimerTriggeredCalc
             #region configuration
             var inputTagName = "cdt158";
             var outputTagName = "cdt158_output_timerbased";
-            var timerMS = 60000; // how long to pause between cycles, in ms
+            var timerMS = 60 * 1000; // how long to pause between cycles, in ms
             var startOnTheMinute = true; // start the calculation exactly on the minute
 
             #endregion // configuration
