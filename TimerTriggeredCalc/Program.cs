@@ -34,7 +34,8 @@ namespace TimerTriggeredCalc
             var inputTagName = "cdt158";
             var outputTagName = "cdt158_output_timerbased";
             var timerMS = 60 * 1000; // how long to pause between cycles, in ms
-            var startOnTheMinute = true; // start the calculation exactly on the minute
+            var defineOffsetSeconds = true; // start the calculation at a particular offset number of seconds, regardless of start time of executable
+            var offsetSeconds = 10; // number of seconds to offset from the top of the minute
 
             #endregion // configuration
 
@@ -62,10 +63,11 @@ namespace TimerTriggeredCalc
             _input = PIPoint.FindPIPoint(myServer, inputTagName);
 
             // Optionally pause the program until the top of the next minute
-            if (startOnTheMinute)
+            if (defineOffsetSeconds)
             {
                 DateTime now = DateTime.Now;
-                Thread.Sleep(((60 - now.Second) * 1000) - now.Millisecond);
+                var secondsUntilOffset = (60 + (offsetSeconds - now.Second)) % 60;
+                Thread.Sleep((secondsUntilOffset * 1000) - now.Millisecond);
             }
 
             // Create a timer with the specified interval
