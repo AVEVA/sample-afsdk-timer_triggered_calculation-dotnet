@@ -19,7 +19,7 @@ namespace TimerTriggeredCalc
         /// </summary>
         public static void Main()
         {
-            var success = MainLoop(false);
+            MainLoop(false);
         }
 
         /// <summary>
@@ -40,13 +40,20 @@ namespace TimerTriggeredCalc
             #endregion // configuration
 
             // Get PI Data Archive object
+            PIServer myServer;
+            var dataArchiveName = "";
+
+            // var dataArchiveName = "PISRV01";
 
             // Default server
-            var myServer = PIServers.GetPIServers().DefaultPIServer;
-
-            // Named server
-            // var dataArchiveName = "PISRV01";
-            // var myServer = PIServers.GetPIServers()[dataArchiveName];
+            if (string.IsNullOrWhiteSpace(dataArchiveName))
+            {
+                myServer = PIServers.GetPIServers().DefaultPIServer;
+            }
+            else
+            {
+                myServer = PIServers.GetPIServers()[dataArchiveName];
+            }
 
             // Get or create the output PI Point
             try
@@ -96,6 +103,14 @@ namespace TimerTriggeredCalc
                 Thread.Sleep(timerMS * 2);
             }
 
+            // Dispose the timer and data pipe objects then quit
+            if (_aTimer != null)
+            {
+                Console.WriteLine("Disposing timer...");
+                _aTimer.Dispose();
+            }
+
+            Console.WriteLine("Quitting...");
             return true;
         }
 
@@ -123,7 +138,7 @@ namespace TimerTriggeredCalc
             var afvals = _input.RecordedValuesByCount(triggerTime, numValues, false, AFBoundaryType.Interpolated, null, false);
 
             // Remove bad values
-            afvals.RemoveAll(a => !a.IsGood);
+            afvals.RemoveAll(afval => !afval.IsGood);
             
             // Loop until no new values were eliminated for being outside of the boundaries
             while (true)
@@ -155,7 +170,7 @@ namespace TimerTriggeredCalc
                     var cutoff = stdev * numStDevs;
                     var startingCount = afvals.Count;
 
-                    afvals.RemoveAll(a => Math.Abs(a.ValueAsDouble() - avg) > cutoff);
+                    afvals.RemoveAll(afval => Math.Abs(afval.ValueAsDouble() - avg) > cutoff);
 
                     // If no items were removed, output the average and break the loop
                     if (afvals.Count == startingCount)
