@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Globalization;
+using System.IO;
 using System.Threading;
 using System.Timers;
+using Microsoft.Extensions.Configuration;
 using OSIsoft.AF.Asset;
 using OSIsoft.AF.Data;
 using OSIsoft.AF.PI;
@@ -13,6 +16,8 @@ namespace TimerTriggeredCalc
         private static Timer _aTimer;
         private static PIPoint _output;
         private static PIPoint _input;
+        private static IConfiguration _configuration;
+        private static Exception _toThrow;
 
         /// <summary>
         /// Entry point of the program
@@ -30,88 +35,103 @@ namespace TimerTriggeredCalc
         /// <returns>true if successful</returns>
         public static bool MainLoop(bool test = false)
         {
-            #region configuration
-            var inputTagName = "cdt158";
-            var outputTagName = "cdt158_output_timerbased";
-            var timerMS = 60 * 1000; // how long to pause between cycles, in ms
-            var defineOffsetSeconds = true; // start the calculation at a particular offset number of seconds, regardless of start time of executable
-            var offsetSeconds = 0; // number of seconds to offset from the top of the minute
-
-            #endregion // configuration
-
-            // Get PI Data Archive object
-            PIServer myServer;
-            var dataArchiveName = "";
-
-            // var dataArchiveName = "PISRV01";
-
-            // Default server
-            if (string.IsNullOrWhiteSpace(dataArchiveName))
-            {
-                myServer = PIServers.GetPIServers().DefaultPIServer;
-            }
-            else
-            {
-                myServer = PIServers.GetPIServers()[dataArchiveName];
-            }
-
-            // Get or create the output PI Point
             try
             {
-                _output = PIPoint.FindPIPoint(myServer, outputTagName);
+                #region configurationSettings
+                _configuration = new ConfigurationBuilder()
+                   .SetBasePath(Directory.GetCurrentDirectory())
+                   .AddJsonFile("appsettings.json")
+                   .AddJsonFile("appsettings.test.json", optional: true)
+                   .Build();
+
+                var dataArchiveName = _configuration["PIDataArchive"];
+                var inputTagName = _configuration["InputTag"];
+                var outputTagName = _configuration["OutputTag"];
+                var timerMS = int.Parse(_configuration["TimerIntervalMS"], CultureInfo.CurrentCulture); // how long to pause between cycles, in ms
+                var defineOffsetSeconds = bool.Parse(_configuration["DefineOffsetSeconds"]); // start the calculation at a particular offset number of seconds, regardless of start time of executable
+                var offsetSeconds = int.Parse(_configuration["OffsetSeconds"], CultureInfo.CurrentCulture); // number of seconds to offset from the top of the minute
+                #endregion // configurationSettings
+
+                (_configuration as ConfigurationRoot).Dispose();
+
+                // Get PI Data Archive object
+                PIServer myServer;
+
+                if (string.IsNullOrWhiteSpace(dataArchiveName))
+                {
+                    myServer = PIServers.GetPIServers().DefaultPIServer;
+                }
+                else
+                {
+                    myServer = PIServers.GetPIServers()[dataArchiveName];
+                }
+
+                // Get or create the output PI Point
+                try
+                {
+                    _output = PIPoint.FindPIPoint(myServer, outputTagName);
+                }
+                catch (PIPointInvalidException)
+                {
+                    _output = myServer.CreatePIPoint(outputTagName);
+                    _output.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float64);
+                }
+
+                // Resolve input tag name to PIPoint object
+                _input = PIPoint.FindPIPoint(myServer, inputTagName);
+
+                // Create a timer with the specified interval
+                _aTimer = new Timer();
+                _aTimer.Interval = timerMS;
+
+                // Add the calculation to the timer's elapsed trigger event handler list
+                _aTimer.Elapsed += TriggerCalculation;
+
+                // Optionally pause the program until the specified offset
+                if (defineOffsetSeconds)
+                {
+                    DateTime now = DateTime.Now;
+                    var secondsUntilOffset = (60 + (offsetSeconds - now.Second)) % 60;
+                    Thread.Sleep((secondsUntilOffset * 1000) - now.Millisecond);
+                }
+
+                // Enable the timer and have it reset on each trigger
+                _aTimer.AutoReset = true;
+                _aTimer.Enabled = true;
+
+                // Once the timer is set up, trigger the calculation manually to not wait a full timer cycle
+                PerformCalculation(DateTime.Now);
+
+                // Allow the program to run indefinitely if not being tested
+                if (!test)
+                {
+                    Console.WriteLine($"Calculations are executing every {timerMS} ms. Press <ENTER> to end... ");
+                    Console.ReadLine();
+                }
+                else
+                {
+                    // Pause to let the calculation run twice before ending the test
+                    Thread.Sleep(timerMS * 2);
+                }
             }
-            catch (PIPointInvalidException)
+            catch (Exception ex)
             {
-                _output = myServer.CreatePIPoint(outputTagName);
-                _output.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float64);
+                Console.WriteLine(ex);
+                _toThrow = ex;
+                throw;
             }
-
-            // Resolve input tag name to PIPoint object
-            _input = PIPoint.FindPIPoint(myServer, inputTagName);
-
-            // Optionally pause the program until the top of the next minute
-            if (defineOffsetSeconds)
+            finally
             {
-                DateTime now = DateTime.Now;
-                var secondsUntilOffset = (60 + (offsetSeconds - now.Second)) % 60;
-                Thread.Sleep((secondsUntilOffset * 1000) - now.Millisecond);
-            }
-
-            // Create a timer with the specified interval
-            _aTimer = new Timer();
-            _aTimer.Interval = timerMS;
-
-            // Add the calculation to the timer's elapsed trigger event handler list
-            _aTimer.Elapsed += TriggerCalculation;
-
-            // Enable the timer and have it reset on each trigger
-            _aTimer.AutoReset = true;
-            _aTimer.Enabled = true;
-
-            // Once the timer is set up, trigger the calculation manually to not wait a full timer cycle
-            PerformCalculation(DateTime.Now);
-
-            // Allow the program to run indefinitely if not being tested
-            if (!test)
-            {
-                Console.WriteLine($"Calculations are executing every {timerMS} ms. Press <ENTER> to end... ");
-                Console.ReadLine();
-            }
-            else
-            {
-                // Pause to let the calculation run twice before ending the test
-                Thread.Sleep(timerMS * 2);
-            }
-
-            // Dispose the timer and data pipe objects then quit
-            if (_aTimer != null)
-            {
-                Console.WriteLine("Disposing timer...");
-                _aTimer.Dispose();
+                // Dispose the timer object then quit
+                if (_aTimer != null)
+                {
+                    Console.WriteLine("Disposing timer...");
+                    _aTimer.Dispose();
+                }
             }
 
             Console.WriteLine("Quitting...");
-            return true;
+            return _toThrow == null;
         }
 
         /// <summary>
