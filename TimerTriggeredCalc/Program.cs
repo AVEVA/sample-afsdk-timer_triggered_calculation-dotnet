@@ -201,7 +201,8 @@ namespace TimerTriggeredCalc
                 }
                 else
                 {
-                    _output.UpdateValue(new AFValue(avg, triggerTime), AFUpdateOption.Insert);
+                    // If all of the values have been removed, don't write any output values
+                    Console.WriteLine($"All values were eliminated from the set. No output will be written for {triggerTime}.");
                     break;
                 }
             }
