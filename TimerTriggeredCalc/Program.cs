@@ -93,6 +93,7 @@ namespace TimerTriggeredCalc
                 // Optionally pause the program until the specified offset
                 if (settings.DefineOffsetSeconds)
                 {
+                    Console.WriteLine($"Pausing until the defined offset of {settings.OffsetSeconds} seconds...");
                     DateTime now = DateTime.Now;
                     var secondsUntilOffset = (60 + (settings.OffsetSeconds - now.Second)) % 60;
                     Thread.Sleep((secondsUntilOffset * 1000) - now.Millisecond);
