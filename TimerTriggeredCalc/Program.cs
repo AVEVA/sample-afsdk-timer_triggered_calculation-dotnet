@@ -1,9 +1,9 @@
 ﻿using System;
-using System.Globalization;
+using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using System.Threading;
 using System.Timers;
-using Microsoft.Extensions.Configuration;
 using OSIsoft.AF.Asset;
 using OSIsoft.AF.Data;
 using OSIsoft.AF.PI;
@@ -14,9 +14,7 @@ namespace TimerTriggeredCalc
     public static class Program
     {
         private static Timer _aTimer;
-        private static PIPoint _output;
-        private static PIPoint _input;
-        private static IConfiguration _configuration;
+        private static List<CalculationContextResolved> _contextListResolved = new List<CalculationContextResolved>();
         private static Exception _toThrow;
 
         /// <summary>
@@ -38,60 +36,65 @@ namespace TimerTriggeredCalc
             try
             {
                 #region configurationSettings
-                _configuration = new ConfigurationBuilder()
-                   .SetBasePath(Directory.GetCurrentDirectory())
-                   .AddJsonFile("appsettings.json")
-                   .AddJsonFile("appsettings.test.json", optional: true)
-                   .Build();
-
-                var dataArchiveName = _configuration["PIDataArchive"];
-                var inputTagName = _configuration["InputTag"];
-                var outputTagName = _configuration["OutputTag"];
-                var timerMS = int.Parse(_configuration["TimerIntervalMS"], CultureInfo.CurrentCulture); // how long to pause between cycles, in ms
-                var defineOffsetSeconds = bool.Parse(_configuration["DefineOffsetSeconds"]); // start the calculation at a particular offset number of seconds, regardless of start time of executable
-                var offsetSeconds = int.Parse(_configuration["OffsetSeconds"], CultureInfo.CurrentCulture); // number of seconds to offset from the top of the minute
+                AppSettings settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(Directory.GetCurrentDirectory() + "/appsettings.json"));
                 #endregion // configurationSettings
-
-                (_configuration as ConfigurationRoot).Dispose();
 
                 // Get PI Data Archive object
                 PIServer myServer;
 
-                if (string.IsNullOrWhiteSpace(dataArchiveName))
+                if (string.IsNullOrWhiteSpace(settings.PIDataArchiveName))
                 {
                     myServer = PIServers.GetPIServers().DefaultPIServer;
                 }
                 else
                 {
-                    myServer = PIServers.GetPIServers()[dataArchiveName];
+                    myServer = PIServers.GetPIServers()[settings.PIDataArchiveName];
                 }
 
-                // Get or create the output PI Point
-                try
+                // Resolve the input and output tag names to PIPoint objects
+                foreach (var context in settings.CalculationContexts)
                 {
-                    _output = PIPoint.FindPIPoint(myServer, outputTagName);
-                }
-                catch (PIPointInvalidException)
-                {
-                    _output = myServer.CreatePIPoint(outputTagName);
-                    _output.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float64);
-                }
+                    CalculationContextResolved thisResolvedContext = new CalculationContextResolved();
 
-                // Resolve input tag name to PIPoint object
-                _input = PIPoint.FindPIPoint(myServer, inputTagName);
+                    try
+                    {
+                        // Resolve the input PIPoint object from its name
+                        thisResolvedContext.InputTag = PIPoint.FindPIPoint(myServer, context.InputTagName);
+
+                        try
+                        {
+                            // Try to resolve the output PIPoint object from its name
+                            thisResolvedContext.OutputTag = PIPoint.FindPIPoint(myServer, context.OutputTagName);
+                        }
+                        catch (PIPointInvalidException)
+                        {
+                            // If it does not exist, create it
+                            thisResolvedContext.OutputTag = myServer.CreatePIPoint(context.OutputTagName);
+                            thisResolvedContext.OutputTag.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float64);
+                        }
+
+                        // If this was successful, add this context pair to the list of resolved contexts
+                        _contextListResolved.Add(thisResolvedContext);
+                    }
+                    catch (Exception ex)
+                    {
+                        // If not successful, inform the user and move on to the next pair
+                        Console.WriteLine($"Input tag {context.InputTagName} will be skipped due to error: {ex.Message}");
+                    }
+                }
 
                 // Create a timer with the specified interval
                 _aTimer = new Timer();
-                _aTimer.Interval = timerMS;
+                _aTimer.Interval = settings.TimerIntervalMS;
 
                 // Add the calculation to the timer's elapsed trigger event handler list
                 _aTimer.Elapsed += TriggerCalculation;
 
                 // Optionally pause the program until the specified offset
-                if (defineOffsetSeconds)
+                if (settings.DefineOffsetSeconds)
                 {
                     DateTime now = DateTime.Now;
-                    var secondsUntilOffset = (60 + (offsetSeconds - now.Second)) % 60;
+                    var secondsUntilOffset = (60 + (settings.OffsetSeconds - now.Second)) % 60;
                     Thread.Sleep((secondsUntilOffset * 1000) - now.Millisecond);
                 }
 
@@ -105,13 +108,13 @@ namespace TimerTriggeredCalc
                 // Allow the program to run indefinitely if not being tested
                 if (!test)
                 {
-                    Console.WriteLine($"Calculations are executing every {timerMS} ms. Press <ENTER> to end... ");
+                    Console.WriteLine($"Calculations are executing every {settings.TimerIntervalMS} ms. Press <ENTER> to end... ");
                     Console.ReadLine();
                 }
                 else
                 {
                     // Pause to let the calculation run twice before ending the test
-                    Thread.Sleep(timerMS * 2);
+                    Thread.Sleep(settings.TimerIntervalMS * 2);
                 }
             }
             catch (Exception ex)
@@ -129,7 +132,7 @@ namespace TimerTriggeredCalc
                     _aTimer.Dispose();
                 }
             }
-
+                
             Console.WriteLine("Quitting...");
             return _toThrow == null;
         }
@@ -149,61 +152,64 @@ namespace TimerTriggeredCalc
         /// </summary>
         /// <param name="triggerTime">The timestamp to perform the calculation against</param>
         private static void PerformCalculation(DateTime triggerTime)
-        { 
+        {
             // Configuration
             var numValues = 100;  // number of values to find the average of
             var numStDevs = 1.75; // number of standard deviations of variance to allow
 
-            // Obtain the recent values from the trigger timestamp
-            var afvals = _input.RecordedValuesByCount(triggerTime, numValues, false, AFBoundaryType.Interpolated, null, false);
-
-            // Remove bad values
-            afvals.RemoveAll(afval => !afval.IsGood);
-            
-            // Loop until no new values were eliminated for being outside of the boundaries
-            while (true)
+            foreach (var context in _contextListResolved)
             {
-                var avg = 0.0;
+                // Obtain the recent values from the trigger timestamp
+                var afvals = context.InputTag.RecordedValuesByCount(triggerTime, numValues, false, AFBoundaryType.Interpolated, null, false);
 
-                if (afvals.Count > 0)
+                // Remove bad values
+                afvals.RemoveAll(afval => !afval.IsGood);
+
+                // Loop until no new values were eliminated for being outside of the boundaries
+                while (true)
                 {
-                    // Calculate the mean
-                    var total = 0.0;
-                    foreach (var afval in afvals)
+                    var avg = 0.0;
+
+                    if (afvals.Count > 0)
                     {
-                        total += afval.ValueAsDouble();
+                        // Calculate the mean
+                        var total = 0.0;
+                        foreach (var afval in afvals)
+                        {
+                            total += afval.ValueAsDouble();
+                        }
+
+                        avg = total / afvals.Count;
+
+                        // Calculate the st dev
+                        var totalSquareVariance = 0.0;
+                        foreach (var afval in afvals)
+                        {
+                            totalSquareVariance += Math.Pow(afval.ValueAsDouble() - avg, 2);
+                        }
+
+                        var avgSqDev = totalSquareVariance / (double)afvals.Count;
+                        var stdev = Math.Sqrt(avgSqDev);
+
+                        // Determine the values outside of the boundaries, and remove them
+                        var cutoff = stdev * numStDevs;
+                        var startingCount = afvals.Count;
+
+                        afvals.RemoveAll(afval => Math.Abs(afval.ValueAsDouble() - avg) > cutoff);
+
+                        // If no items were removed, output the average and break the loop
+                        if (afvals.Count == startingCount)
+                        {
+                            context.OutputTag.UpdateValue(new AFValue(avg, triggerTime), AFUpdateOption.Insert);
+                            break;
+                        }
                     }
-
-                    avg = total / afvals.Count;
-
-                    // Calculate the st dev
-                    var totalSquareVariance = 0.0;
-                    foreach (var afval in afvals)
+                    else
                     {
-                        totalSquareVariance += Math.Pow(afval.ValueAsDouble() - avg, 2);
-                    }
-
-                    var avgSqDev = totalSquareVariance / (double)afvals.Count;
-                    var stdev = Math.Sqrt(avgSqDev);
-
-                    // Determine the values outside of the boundaries, and remove them
-                    var cutoff = stdev * numStDevs;
-                    var startingCount = afvals.Count;
-
-                    afvals.RemoveAll(afval => Math.Abs(afval.ValueAsDouble() - avg) > cutoff);
-
-                    // If no items were removed, output the average and break the loop
-                    if (afvals.Count == startingCount)
-                    {
-                        _output.UpdateValue(new AFValue(avg, triggerTime), AFUpdateOption.Insert);
+                        // If all of the values have been removed, don't write any output values
+                        Console.WriteLine($"All values were eliminated from the set. No output will be written to {context.OutputTag.Name} for {triggerTime}.");
                         break;
                     }
-                }
-                else
-                {
-                    // If all of the values have been removed, don't write any output values
-                    Console.WriteLine($"All values were eliminated from the set. No output will be written for {triggerTime}.");
-                    break;
                 }
             }
         }
