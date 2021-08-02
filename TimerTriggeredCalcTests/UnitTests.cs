@@ -21,7 +21,7 @@ namespace TimerTriggeredCalcTests
             double valToWrite = 0.0;
             int numValsToWrite = 3; // must be 2 or more to check for proper interval spacing
             var errorThreshold = new TimeSpan(0, 0, 0, 0, 100); // 100 ms time max error is acceptable due to race condition between sample and test
-            var cancellationThreshold = 3; // cancelling the timer object is slightly unpredictable, don't fail the test unless it loops far too many times
+            var cancellationThreshold = 15; // cancelling the timer object is slightly unpredictable, don't fail the test unless it loops far too many times
 
             try
             {
@@ -165,7 +165,7 @@ namespace TimerTriggeredCalcTests
                     context.OutputTag = PIPoint.FindPIPoint(myServer, context.OutputTagName);
 
                     // Obtain the values that should exist, plus 2. The first is 'Pt Created' and the second would represent too many values created
-                    var afvals = context.OutputTag.RecordedValuesByCount(DateTime.Now, numValsToWrite + 2, false, AFBoundaryType.Inside, null, false);
+                    var afvals = context.OutputTag.RecordedValuesByCount(DateTime.Now, numValsToWrite + cancellationThreshold + 2, false, AFBoundaryType.Inside, null, false);
 
                     // Remove the initial 'Pt Created' value from the list
                     afvals.RemoveAll(afval => !afval.IsGood);
