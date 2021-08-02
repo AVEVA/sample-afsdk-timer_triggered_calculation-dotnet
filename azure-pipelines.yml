@@ -33,8 +33,6 @@ resources:
 
 variables:
   - template: '/miscellaneous/build_templates/variables.yml@templates'
-  - name: projPath
-    value: ''
   - name: CredFile
     value: appsettings.json
   - name: CredFileLibrary
@@ -52,7 +50,7 @@ jobs:
         parameters:
           fileOriginal: $(CredFile)
           fileLibrary: $(CredFileLibrary)
-          filePath: $(projPath)
+          filePath: /TimerTriggeredCalc
 
       - script: |
           nuget restore
