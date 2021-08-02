@@ -80,7 +80,7 @@ The sample uses an implicit connection to the PI Data Archive under the context 
 
 1. Clone the sample repository to a local folder
 1. In the TimerTriggeredCalc directory, create appsettings.json from [appsettings.placeholder.json](TimerTriggeredCalc\appsettings.placeholder.json) and edit the configuration as necessary
-1. Build and run the solution using Visual Studio
+1. Build and run the solution using Visual Studio or the command line
 1. Observe in a client tool (PI SMT, PI Vision, etc) that the output tag is created and being written to on the timer
 
 
