@@ -212,8 +212,7 @@ namespace TimerTriggeredCalc
             // Loop until no new values were eliminated for being outside of the boundaries
             while (true)
             {
-                var avg = 0.0;
-
+                // Don't loop if all values have been removed
                 if (afvals.Count > 0)
                 {
                     // Calculate the mean
@@ -223,7 +222,7 @@ namespace TimerTriggeredCalc
                         total += afval.ValueAsDouble();
                     }
 
-                    avg = total / afvals.Count;
+                    var avg = total / afvals.Count;
 
                     // Calculate the st dev
                     var totalSquareVariance = 0.0;
