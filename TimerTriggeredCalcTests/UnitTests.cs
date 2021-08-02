@@ -20,8 +20,8 @@ namespace TimerTriggeredCalcTests
         {
             double valToWrite = 0.0;
             int numValsToWrite = 3; // must be 2 or more to check for proper interval spacing
-            var errorThreshold = new TimeSpan(0, 0, 0, 0, 100); // 100 ms time max error is acceptable due to race condition between sample and test
-            var cancellationThreshold = 15; // cancelling the timer object is slightly unpredictable, don't fail the test unless it loops far too many times
+            var errorThreshold = new TimeSpan(0, 0, 0, 1); // 1s time max error is acceptable due to race condition between sample and test
+            var cancellationThreshold = 15; // canceling the timer object is slightly unpredictable, don't fail the test unless it loops far too many times
 
             try
             {
