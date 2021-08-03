@@ -45,10 +45,12 @@ jobs:
           fileLibrary: $(CredFileLibrary)
           filePath: /TimerTriggeredCalc
 
-      - script: |
-          nuget restore
+      - task: NuGetCommand@2
         displayName: 'nuget restore'
-        
+        inputs:
+          command: 'restore'
+          restoreSolution: '**/*.sln'
+
       - task: VSBuild@1
         displayName: 'Build solution'
         inputs: 
