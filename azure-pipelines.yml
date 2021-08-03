@@ -49,7 +49,7 @@ jobs:
         displayName: 'nuget restore'
         inputs:
           command: 'restore'
-          restoreSolution: '/TimerTriggeredCalc.sln'
+          restoreSolution: '**/*.sln'
 
       - task: VSBuild@1
         displayName: 'Build solution'
@@ -73,7 +73,7 @@ jobs:
       displayName: 'nuget restore'
       inputs:
         command: 'restore'
-        restoreSolution: '/TimerTriggeredCalc.sln'
+        restoreSolution: '**/*.sln'
 
     - template: '/miscellaneous/build_templates/binskim.yml@templates'
 
