@@ -16,6 +16,7 @@ namespace TimerTriggeredCalc
     public static class Program
     {
         private static Timer _aTimer;
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0044:Add readonly modifier", Justification = "List contents defined in code from settings file")]
         private static List<CalculationContextResolved> _contextListResolved = new List<CalculationContextResolved>();
         private static Exception _toThrow;
 
@@ -24,11 +25,14 @@ namespace TimerTriggeredCalc
         /// </summary>
         public static void Main()
         {
+            // Create a cancellation token source in order to cancel the calculation loop on demand
             var source = new CancellationTokenSource();
             var token = source.Token;
 
+            // Launch the sample's main loop, passing it the cancellation token
             var success = MainLoop(token);
 
+            // Pause until the user decides to end the loop
             Console.WriteLine($"Press <ENTER> to end... ");
             Console.ReadLine();
 
@@ -60,7 +64,9 @@ namespace TimerTriggeredCalc
                 AppSettings settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(Directory.GetCurrentDirectory() + "/appsettings.json"));
                 #endregion // configurationSettings
 
-                // Get PI Data Archive object
+                #region step1
+                Console.WriteLine("Resolving PI Data Archive object...");
+
                 PIServer myServer;
 
                 if (string.IsNullOrWhiteSpace(settings.PIDataArchiveName))
@@ -71,11 +77,14 @@ namespace TimerTriggeredCalc
                 {
                     myServer = PIServers.GetPIServers()[settings.PIDataArchiveName];
                 }
+                #endregion // step1
 
-                // Resolve the input and output tag names to PIPoint objects
+                #region step2
+                Console.WriteLine("Resolving input and output PIPoint objects...");
+
                 foreach (var context in settings.CalculationContexts)
                 {
-                    CalculationContextResolved thisResolvedContext = new CalculationContextResolved();
+                    var thisResolvedContext = new CalculationContextResolved();
 
                     try
                     {
@@ -95,8 +104,8 @@ namespace TimerTriggeredCalc
                             // Turn off compression, set to Double, and confirm there were no errors in doing so
                             thisResolvedContext.OutputTag.SetAttribute(PICommonPointAttributes.Compressing, 0);
                             thisResolvedContext.OutputTag.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float64);
-                            AFErrors<string> errors = thisResolvedContext.OutputTag.SaveAttributes(PICommonPointAttributes.Compressing,
-                                                                                                  PICommonPointAttributes.PointType);
+                            var errors = thisResolvedContext.OutputTag.SaveAttributes(PICommonPointAttributes.Compressing,
+                                                                                      PICommonPointAttributes.PointType);
 
                             if (errors != null && errors.HasErrors)
                             {
@@ -119,39 +128,59 @@ namespace TimerTriggeredCalc
                         Console.WriteLine($"Input tag {context.InputTagName} will be skipped due to error: {ex.Message}");
                     }
                 }
+                #endregion // step2
 
-                // Create a timer with the specified interval
-                _aTimer = new Timer();
-                _aTimer.Interval = settings.TimerIntervalMS;
+                #region step3
+                Console.WriteLine("Creating a timer to trigger the calculations...");
 
+                _aTimer = new Timer()
+                {
+                    Interval = settings.TimerIntervalMS,
+                    AutoReset = true,
+                };
+                
                 // Add the calculation to the timer's elapsed trigger event handler list
                 _aTimer.Elapsed += TriggerCalculation;
+                #endregion // step3
 
-                // Optionally pause the program until the specified offset
+                #region step4
+                
                 if (settings.DefineOffsetSeconds)
                 {
                     Console.WriteLine($"Pausing until the defined offset of {settings.OffsetSeconds} seconds...");
-                    DateTime now = DateTime.Now;
+                    var now = DateTime.Now;
                     var secondsUntilOffset = (60 + (settings.OffsetSeconds - now.Second)) % 60;
                     Thread.Sleep((secondsUntilOffset * 1000) - now.Millisecond);
                 }
+                else
+                {
+                    Console.WriteLine("Not pausing until a define offset");
+                }
 
                 // Enable the timer and have it reset on each trigger
-                _aTimer.AutoReset = true;
                 _aTimer.Enabled = true;
+                #endregion // step4
 
-                // Once the timer is set up, trigger the calculation manually to not wait a full timer cycle
+                #region step5
+                Console.WriteLine("Triggering the initial calculation...");
+                
                 PerformAllCalculations(DateTime.Now);
+                #endregion // step5
 
-                // Allow the program to run indefinitely until canceled
+                #region step6
+                Console.WriteLine("Triggering the initial calculation...");
+
                 await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                #endregion //step6
             }
             catch (TaskCanceledException)
             {
+                // Task cancellation is done via exception but shouldn't denote a failure
                 Console.WriteLine("Task canceled successfully");
             }
             catch (Exception ex)
             {
+                // All other exceptions should be treated as a failure
                 Console.WriteLine(ex);
                 _toThrow = ex;
                 throw;

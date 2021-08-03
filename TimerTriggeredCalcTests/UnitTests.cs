@@ -25,11 +25,14 @@ namespace TimerTriggeredCalcTests
 
             try
             {
-                // Read in settings file from other folder
+                #region configurationSettings
                 string solutionFolderName = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName;
                 AppSettings settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(solutionFolderName + "/TimerTriggeredCalc/appsettings.json"));
+                #endregion // configurationSettings
 
-                // Connect to PI Data Archive
+                #region step1
+                Console.WriteLine("TEST: Resolving PI Data Archive object...");
+
                 PIServer myServer;
 
                 if (string.IsNullOrWhiteSpace(settings.PIDataArchiveName))
@@ -41,7 +44,11 @@ namespace TimerTriggeredCalcTests
                     myServer = PIServers.GetPIServers()[settings.PIDataArchiveName];
                 }
 
-                // For each context pair, check that the input tag and output do not already exist, and create them
+                #endregion // step1
+
+                #region step2
+                Console.WriteLine("TEST: Resolving input and output PIPoint objects...");
+
                 var contextListResolved = new List<CalculationContextResolvedTest>();
 
                 foreach (var context in settings.CalculationContexts)
@@ -102,11 +109,11 @@ namespace TimerTriggeredCalcTests
                     }
                 }
 
-                // Run MainLoop
-                var source = new CancellationTokenSource();
-                var token = source.Token;
+                #endregion // step2
 
-                // Write three values each to each input test tag
+                #region step3
+                Console.WriteLine("TEST: Writing values to input tags...");
+
                 for (int i = 0; i < numValsToWrite; ++i)
                 {
                     DateTime currentTime = DateTime.Now;
@@ -117,11 +124,19 @@ namespace TimerTriggeredCalcTests
                     }
 
                     // Pause for a second to separate the values
-                    Thread.Sleep(500);
+                    Thread.Sleep(1 * 1000);
                 }
 
+                #endregion // step3
+
+                #region step4
+                Console.WriteLine("TEST: Calling main sample...");
+
+                var source = new CancellationTokenSource();
+                var token = source.Token;
+
                 // Start the calculation
-                DateTime sampleStart = DateTime.Now;
+                var sampleStart = DateTime.Now;
                 var success = Program.MainLoop(token);
 
                 // Calculate the times the sample should be writing to
@@ -144,9 +159,9 @@ namespace TimerTriggeredCalcTests
                 // allow it to trigger some calculations, subtract 1 for the trigger at the start time itself
                 Thread.Sleep((numValsToWrite - 1) * settings.TimerIntervalMS);
 
-                // Cancel the operation and pause to ensure it's heard
+                // Cancel the operation  and wait for the sample to clean up
                 source.Cancel();
-                Thread.Sleep(1 * 1000);
+                var outcome = success.Result;
 
                 // Dispose of the cancellation token source
                 if (source != null)
@@ -156,9 +171,12 @@ namespace TimerTriggeredCalcTests
                 }
 
                 // Confirm that the sample ran cleanly
-                Assert.True(success.Result);
+                Assert.True(outcome);
+                #endregion // step4
 
-                // Check that output tags have three values each
+                #region step5
+                Console.WriteLine("TEST: Checking the output tag values...");
+
                 foreach (var context in contextListResolved)
                 {
                     // First, resolve the output tag to ensure the sample created it successfully
@@ -196,13 +214,17 @@ namespace TimerTriggeredCalcTests
                             $"expected value of {expectedTimeStamp} by more than acceptable error of {errorThreshold}");
                     }
                 }
+                #endregion // step5
 
-                // Delete the output and intput test tags
+                #region step6
+                Console.WriteLine("TEST: Cleaning up...");
+
                 foreach (var context in contextListResolved)
                 {
                     myServer.DeletePIPoint(context.InputTag.Name);
                     myServer.DeletePIPoint(context.OutputTag.Name);
                 }
+                #endregion // step6
             }
             catch (Exception ex)
             {
