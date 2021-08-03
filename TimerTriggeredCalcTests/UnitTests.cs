@@ -171,7 +171,8 @@ namespace TimerTriggeredCalcTests
                     afvals.RemoveAll(afval => !afval.IsGood);
 
                     // Confirm the correct number of values were written, within reason
-                    Assert.True(Math.Abs(afvals.Count - numValsToWrite) < cancellationThreshold); 
+                    Assert.True((afvals.Count - numValsToWrite) < cancellationThreshold, $"The test wrote {afvals.Count} values but expected to write {numValsToWrite}, which exceeds the threshold of {cancellationThreshold}");
+                    Assert.True(afvals.Count >= numValsToWrite, $"The test wrote {afvals.Count} values but should have written at least {numValsToWrite}");
 
                     // Check each value
                     for (int i = 0; i < afvals.Count; ++i)
