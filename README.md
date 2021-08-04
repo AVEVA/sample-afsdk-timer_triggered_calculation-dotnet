@@ -23,7 +23,7 @@ A [Cancellation Token](https://docs.microsoft.com/en-us/dotnet/api/system.thread
 1. A connection is made to the named Data Archive
     1. If blank, it will use the default Data Archive
     1. The connection is made implicitly under the identity of the account executing the code
-1. For each pair of input and output tag names:
+1. For each pair of input* and output tag names:
     1. The input tag name is resolved to a PIPoint object
     1. The output tag name is resolved to a PIPoint, or is created if it does not exist
     1. The pair of input and output PIPoint objects are added to the application's list of [resolved calcuation contexts](TimerTriggeredCalc\CalculationContextResolved.cs).
@@ -34,6 +34,8 @@ A [Cancellation Token](https://docs.microsoft.com/en-us/dotnet/api/system.thread
     1. For example, if `OffsetSeconds` is 0, the application will pause until the top of the next minute so that the first calculation will have a :00 timestamp.
 1. Since the timer waits for an entire cycle before triggering for the first time, the first calculation is explicitly called once the timer object is set up
 1. The application continually triggers the calculation every interval, until the token is canceled.
+
+*Note: The sample uses a single input tag, but this could be expanded to multiple input tags by adding properties to the [CalculationContext.cs](TimerTriggeredCalc\CalculationContext.cs) and [CalculationContextResolved.cs](TimerTriggeredCalc\CalculationContextResolved.cs) classes, the [appsettings.json](TimerTriggeredCalc\appsettings.placeholder.json) file, and incorporating the additional input tag(s) into the [PerformCalculation](TimerTriggeredCalc\Program.cs) function logic. Since the sample uses a `context` and not simply an input tag, it should be architected in such a way to easily allow multiple input tags if desired.
 
 The calculation logic itself is not the main purpose of the sample, but it demonstrates a complex, conditional, looping calculation that is beyond the functionality of Asset Analytics.
 
