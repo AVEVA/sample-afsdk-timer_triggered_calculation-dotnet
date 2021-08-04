@@ -16,7 +16,7 @@ Previously, this use case was handled by either PI Advanced Computing Engine (AC
 
 ## Calculation Work Flow
 
-The sample code is intended to provide a starting point that matches the feel of a `periodic` ACE calculation executing on a timer with an optional specified offset from the top of the minute. To demonstrate scalability by reusing the same calculation logic for a large number of calculations, any number of pairs of input and output tag names can be specified in [appsettings.json](EventTriggeredCalc\appsettings.placeholder.json); the calculation will execute against each input tag and write to the corresponding output tag.
+The sample code is intended to provide a starting point that matches the feel of a `periodic` ACE calculation executing on a timer with an optional specified offset from the top of the minute. To demonstrate scalability by reusing the same calculation logic for a large number of calculations, any number of pairs of input and output tag names can be specified in [appsettings.json](EventTriggeredCalc/appsettings.placeholder.json); the calculation will execute against each input tag and write to the corresponding output tag.
 
 A [Cancellation Token](https://docs.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=netframework-4.8) is used to end the calculation loop so that it can run indefinitely but be cancelled on demand. In this sample, the cancellation occurs when the user hits `ENTER`, but this is a demonstration of how to cancel the operation gracefully.
 
@@ -26,7 +26,7 @@ A [Cancellation Token](https://docs.microsoft.com/en-us/dotnet/api/system.thread
 1. For each pair of input* and output tag names:
     1. The input tag name is resolved to a PIPoint object
     1. The output tag name is resolved to a PIPoint, or is created if it does not exist
-    1. The pair of input and output PIPoint objects are added to the application's list of [resolved calcuation contexts](TimerTriggeredCalc\CalculationContextResolved.cs).
+    1. The pair of input and output PIPoint objects are added to the application's list of [resolved calcuation contexts](TimerTriggeredCalc/CalculationContextResolved.cs).
     1. If either PIPoint object could not be resolved, a warning is outputted to the console and the application moves on to the next pair. This allows the application to work against all resolvable contexts.
 1. A [System.Timers.Timer](https://docs.microsoft.com/en-us/dotnet/api/system.timers.timer?view=netframework-4.8) object is configured to trigger the calculation on the specified interval of `TimerIntervalMS`
     1. For each calculation trigger, the application loops through the list of resolved calculation contexts, executing the calculation against each input and writing to its corresponding output.
@@ -35,7 +35,7 @@ A [Cancellation Token](https://docs.microsoft.com/en-us/dotnet/api/system.thread
 1. Since the timer waits for an entire cycle before triggering for the first time, the first calculation is explicitly called once the timer object is set up
 1. The application continually triggers the calculation every interval, until the token is canceled.
 
-*Note: The sample uses a single input tag, but this could be expanded to multiple input tags by adding properties to the [CalculationContext.cs](TimerTriggeredCalc\CalculationContext.cs) and [CalculationContextResolved.cs](TimerTriggeredCalc\CalculationContextResolved.cs) classes, the [appsettings.json](TimerTriggeredCalc\appsettings.placeholder.json) file, and incorporating the additional input tag(s) into the [PerformCalculation](TimerTriggeredCalc\Program.cs) function logic. Since the sample uses a `context` and not simply an input tag, it should be architected in such a way to easily allow multiple input tags if desired.
+*Note: The sample uses a single input tag, but this could be expanded to multiple input tags by adding properties to the [CalculationContext.cs](TimerTriggeredCalc/CalculationContext.cs) and [CalculationContextResolved.cs](TimerTriggeredCalc/CalculationContextResolved.cs) classes, the [appsettings.json](TimerTriggeredCalc/appsettings.placeholder.json) file, and incorporating the additional input tag(s) into the [PerformCalculation](TimerTriggeredCalc/Program.cs) function logic. Since the sample uses a `context` and not simply an input tag, it should be architected in such a way to easily allow multiple input tags if desired.
 
 The calculation logic itself is not the main purpose of the sample, but it demonstrates a complex, conditional, looping calculation that is beyond the functionality of Asset Analytics.
 
@@ -59,7 +59,7 @@ Note: This sample uses `AF SDK 2.10.9` and `.NET Framework 4.8`. Older versions 
 
 ## Getting Started
 
-The sample is configured using the file [appsettings.placeholder.json](TimerTriggeredCalc\appsettings.placeholder.json). Before editing, rename this file to `appsettings.json`. This repository's `.gitignore` rules should prevent the file from ever being checked in to any fork or branch.
+The sample is configured using the file [appsettings.placeholder.json](TimerTriggeredCalc/appsettings.placeholder.json). Before editing, rename this file to `appsettings.json`. This repository's `.gitignore` rules should prevent the file from ever being checked in to any fork or branch.
 
 ```json
 {
@@ -83,7 +83,7 @@ The sample is configured using the file [appsettings.placeholder.json](TimerTrig
 The sample uses an implicit connection to the PI Data Archive under the context of the account running the application. For guidance on using an explicit connection, see the [Connecting to a PI Data Archive AF SDK reference](https://docs.osisoft.com/bundle/af-sdk/page/html/connecting-to-a-pi-data-archive.htm).
 
 1. Clone the sample repository to a local folder
-1. In the TimerTriggeredCalc directory, create appsettings.json from [appsettings.placeholder.json](TimerTriggeredCalc\appsettings.placeholder.json) and edit the configuration as necessary
+1. In the TimerTriggeredCalc directory, create appsettings.json from [appsettings.placeholder.json](TimerTriggeredCalc/appsettings.placeholder.json) and edit the configuration as necessary
 1. Build and run the solution using Visual Studio or using cmd
     ```shell
     nuget restore
@@ -95,7 +95,7 @@ The sample uses an implicit connection to the PI Data Archive under the context 
 
 ## Running the Automated Test
 
-The test in [TimerTriggeredCalcTests](TimerTriggeredCalcTests\UnitTests.cs) tests the sample's purpose of providing a framework for calculations to loop indefinitely, trigger on elapsed timer intervals by doing the following:
+The test in [TimerTriggeredCalcTests](TimerTriggeredCalcTests/UnitTests.cs) tests the sample's purpose of providing a framework for calculations to loop indefinitely, trigger on elapsed timer intervals by doing the following:
 1. Connect to the specified PI Data Archive
 1. For each pair of input and output tag names:
     1. Confirm that the input tag does not already exist. The test will be writing to the input tag then deleting it, so an existing tag should not be used.
