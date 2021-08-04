@@ -15,9 +15,8 @@ namespace TimerTriggeredCalc
 {
     public static class Program
     {
+        private static readonly List<CalculationContextResolved> _contextListResolved = new List<CalculationContextResolved>();
         private static Timer _aTimer;
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0044:Add readonly modifier", Justification = "List contents defined in code from settings file")]
-        private static List<CalculationContextResolved> _contextListResolved = new List<CalculationContextResolved>();
         private static Exception _toThrow;
 
         /// <summary>

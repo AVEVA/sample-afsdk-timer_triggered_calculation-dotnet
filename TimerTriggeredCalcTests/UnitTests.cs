@@ -124,7 +124,7 @@ namespace TimerTriggeredCalcTests
                     }
 
                     // Pause for a second to separate the values
-                    Thread.Sleep(1 * 1000);
+                    Thread.Sleep(1000);
                 }
 
                 #endregion // step3
