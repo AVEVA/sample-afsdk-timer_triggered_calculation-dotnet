@@ -61,14 +61,14 @@ The sample is configured using the file [appsettings.placeholder.json](TimerTrig
 
 ```json
 {
-  "PIDataArchive": "",
-  "TimerIntervalMS": 60000,
-  "DefineOffsetSeconds": true,
-  "OffsetSeconds": 0,
-  "CalculationContexts": [
+  "PIDataArchive": "",            // Leave blank to use the machine's default PI Data Archive
+  "TimerIntervalMS": 60000,       // How often to trigger the calculation, in ms
+  "DefineOffsetSeconds": true,    // Whether or not to execute the first calculation at a defined offset
+  "OffsetSeconds": 0,             // The offset to wait for, in sec.
+  "CalculationContexts": [        // Array of pairs of input and output tags
     {
-      "InputTagName": "input1",
-      "OutputTagName": "output1"
+      "InputTagName": "input1",   // The tag whose existing data is read in for the calculation
+      "OutputTagName": "output1"  // The tag that is written to for the output of the calculation
     },
     {
       "InputTagName": "input2",
