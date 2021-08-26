@@ -5,18 +5,20 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
+using OSIsoft.AF;
 using OSIsoft.AF.Asset;
 using OSIsoft.AF.Data;
-using OSIsoft.AF.PI;
 using Timer = System.Timers.Timer;
 
 namespace TimerTriggeredCalc
 {
     public static class Program
     {
-        private static readonly List<CalculationContextResolved> _contextListResolved = new List<CalculationContextResolved>();
-        private static Timer _aTimer;
+        private static readonly List<AFElement> _contextList = new List<AFElement>();
+        private static AFDataCache _myAFDataCache;
+        private static AFKeyedResults<AFAttribute, AFData> _dataCaches;
         private static Exception _toThrow;
+        private static Timer _aTimer;
 
         /// <summary>
         /// Entry point of the program
@@ -63,86 +65,89 @@ namespace TimerTriggeredCalc
                 #endregion // configurationSettings
 
                 #region step1
-                Console.WriteLine("Resolving PI Data Archive object...");
+                Console.WriteLine("Resolving AF Server object...");
 
-                PIServer myServer;
+                var myPISystems = new PISystems();
+                PISystem myPISystem;
 
-                if (string.IsNullOrWhiteSpace(settings.PIDataArchiveName))
+                if (string.IsNullOrWhiteSpace(settings.AFServerName))
                 {
-                    myServer = PIServers.GetPIServers().DefaultPIServer;
+                    // Use the default PI Data Archive
+                    myPISystem = myPISystems.DefaultPISystem;
                 }
                 else
                 {
-                    myServer = PIServers.GetPIServers()[settings.PIDataArchiveName];
+                    myPISystem = myPISystems[settings.AFServerName];
+                }
+
+                Console.WriteLine("Resolving AF Database object...");
+
+                AFDatabase myAFDB;
+
+                if (string.IsNullOrWhiteSpace(settings.AFDatabaseName))
+                {
+                    // Use the default PI Data Archive
+                    myAFDB = myPISystem.Databases.DefaultDatabase;
+                }
+                else
+                {
+                    myAFDB = myPISystem.Databases[settings.AFDatabaseName];
                 }
                 #endregion // step1
 
                 #region step2
-                Console.WriteLine("Resolving input and output PIPoint objects...");
+                Console.WriteLine("Resolving AFAttributes to add to the Data Cache...");
 
-                foreach (var context in settings.CalculationContexts)
+                var attributeCacheList = new List<AFAttribute>();
+                
+                // Resolve the input and output tag names to PIPoint objects
+                foreach (var context in settings.Contexts)
                 {
-                    var thisResolvedContext = new CalculationContextResolved();
-
                     try
                     {
-                        // Resolve the input PIPoint object from its name
-                        thisResolvedContext.InputTag = PIPoint.FindPIPoint(myServer, context.InputTagName);
+                        // Resolve the element from its name
+                        var thisElement = myAFDB.Elements[context];
 
-                        try
+                        // Make a list of inputs to ensure a partially failed context resolution doesn't add to the data cache
+                        var thisattributeCacheList = new List<AFAttribute>();
+
+                        // Resolve each input attribute
+                        foreach (var input in settings.Inputs)
                         {
-                            // Try to resolve the output PIPoint object from its name
-                            thisResolvedContext.OutputTag = PIPoint.FindPIPoint(myServer, context.OutputTagName);
-                        }
-                        catch (PIPointInvalidException)
-                        {
-                            // If it does not exist, create it
-                            thisResolvedContext.OutputTag = myServer.CreatePIPoint(context.OutputTagName);
-
-                            // Turn off compression, set to Double, and confirm there were no errors in doing so
-                            thisResolvedContext.OutputTag.SetAttribute(PICommonPointAttributes.Compressing, 0);
-                            thisResolvedContext.OutputTag.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float64);
-                            var errors = thisResolvedContext.OutputTag.SaveAttributes(PICommonPointAttributes.Compressing,
-                                                                                      PICommonPointAttributes.PointType);
-
-                            if (errors != null && errors.HasErrors)
-                            {
-                                Console.WriteLine("Errors calling PIPoint.SaveAttributes:");
-                                foreach (var item in errors.Errors)
-                                {
-                                    Console.WriteLine($"  {item.Key}: {item.Value}");
-                                }
-
-                                throw new Exception("Error saving Output PIPoint configuration changes");
-                            }
+                            thisattributeCacheList.Add(thisElement.Attributes[input]);
                         }
 
-                        // If this was successful, add this context pair to the list of resolved contexts
-                        _contextListResolved.Add(thisResolvedContext);
+                        // If successful, add to the list of resolved attributes to the data cache list
+                        _contextList.Add(thisElement);
+                        attributeCacheList.AddRange(thisattributeCacheList);
                     }
                     catch (Exception ex)
                     {
                         // If not successful, inform the user and move on to the next pair
-                        Console.WriteLine($"Input tag {context.InputTagName} will be skipped due to error: {ex.Message}");
+                        Console.WriteLine($"Context {context} will be skipped due to error: {ex.Message}");
                     }
                 }
                 #endregion // step2
 
                 #region step3
-                Console.WriteLine("Creating a timer to trigger the calculations...");
+                Console.WriteLine("Creating a data cache for snapshot event updates...");
 
+                _myAFDataCache = new AFDataCache();
+                _dataCaches = _myAFDataCache.Add(attributeCacheList);
+                _myAFDataCache.CacheTimeSpan = new TimeSpan(settings.CacheTimeSpanSeconds * TimeSpan.TicksPerSecond);
+
+                // Create a timer with the specified interval of checking for updates
                 _aTimer = new Timer()
                 {
                     Interval = settings.TimerIntervalMS,
                     AutoReset = true,
                 };
-                
+
                 // Add the calculation to the timer's elapsed trigger event handler list
                 _aTimer.Elapsed += TriggerCalculation;
                 #endregion // step3
 
                 #region step4
-                
                 if (settings.DefineOffsetSeconds)
                 {
                     Console.WriteLine($"Pausing until the defined offset of {settings.OffsetSeconds} seconds...");
@@ -166,7 +171,7 @@ namespace TimerTriggeredCalc
                 #endregion // step5
 
                 #region step6
-                Console.WriteLine("Triggering the initial calculation...");
+                Console.WriteLine("Waiting for cancellation token to be triggered...");
 
                 await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
                 #endregion //step6
@@ -204,6 +209,7 @@ namespace TimerTriggeredCalc
         /// <param name="e">An ElapsedEventArgs object that contains the event data</param>
         private static void TriggerCalculation(object source, ElapsedEventArgs e)
         {
+            _myAFDataCache.UpdateData();
             PerformAllCalculations(e.SignalTime);
         }
 
@@ -213,7 +219,7 @@ namespace TimerTriggeredCalc
         /// <param name="triggerTime">The timestamp to perform the calculation against</param>
         private static void PerformAllCalculations(DateTime triggerTime)
         {
-            foreach (var context in _contextListResolved)
+            foreach (var context in _contextList)
             {
                 PerformCalculation(triggerTime, context);
             }
@@ -221,22 +227,45 @@ namespace TimerTriggeredCalc
 
         /// <summary>
         /// This function performs the calculation and writes the value to the output tag
-        /// </summary>
         /// <param name="triggerTime">The timestamp to perform the calculation against</param>
         /// <param name="context">The context on which to perform this calculation</param>
-        private static void PerformCalculation(DateTime triggerTime, CalculationContextResolved context)
+        private static void PerformCalculation(DateTime triggerTime, AFElement context)
         {
             // Configuration
             var numValues = 100;  // number of values to find the average of
+            var forward = false;
+            var tempUom = "K";
+            var pressUom = "torr";
+            var volUom = "L";
+            var molUom = "mol";
+            var filterExpression = string.Empty;
+            var includeFilteredValues = false;
+
             var numStDevs = 1.75; // number of standard deviations of variance to allow
 
             // Obtain the recent values from the trigger timestamp
-            var afvals = context.InputTag.RecordedValuesByCount(triggerTime, numValues, false, AFBoundaryType.Interpolated, null, false);
+            var afTempVals = context.Attributes["Temperature"].Data.RecordedValuesByCount(triggerTime, numValues, forward, AFBoundaryType.Interpolated, context.PISystem.UOMDatabase.UOMs[tempUom], filterExpression, includeFilteredValues);
+            var afPressVals = context.Attributes["Pressure"].Data.RecordedValuesByCount(triggerTime, numValues, forward, AFBoundaryType.Interpolated, context.PISystem.UOMDatabase.UOMs[pressUom], filterExpression, includeFilteredValues);
+            var afVolumeVal = context.Attributes["Volume"].Data.EndOfStream(context.PISystem.UOMDatabase.UOMs[volUom]);
 
             // Remove bad values
-            afvals.RemoveAll(afval => !afval.IsGood);
+            afTempVals.RemoveAll(afval => !afval.IsGood);
+            afPressVals.RemoveAll(afval => !afval.IsGood);
 
-            // Loop until no new values were eliminated for being outside of the boundaries
+            // Iteratively solve for the trimmed mean of temperature and pressure
+            var meanTemp = GetTrimmedMean(afTempVals, numStDevs);
+            var meanPressure = GetTrimmedMean(afPressVals, numStDevs);
+
+            // Apply the Ideal Gas Law (PV = nRT) to solve for number of moles
+            var gasConstant = 62.363598221529; // units of  L * Torr / (K * mol)
+            var n = meanPressure * afVolumeVal.ValueAsDouble() / (gasConstant * meanTemp); // PV = nRT; n = PV/(RT)
+
+            // write to output attribute.
+            context.Attributes["Moles"].Data.UpdateValue(new AFValue(n, triggerTime, context.PISystem.UOMDatabase.UOMs[molUom]), AFUpdateOption.Insert);
+        }
+
+        private static double GetTrimmedMean(AFValues afvals, double numberOfStandardDeviations)
+        {
             while (true)
             {
                 // Don't loop if all values have been removed
@@ -262,7 +291,7 @@ namespace TimerTriggeredCalc
                     var stdev = Math.Sqrt(meanSqDev);
 
                     // Determine the values outside of the boundaries, and remove them
-                    var cutoff = stdev * numStDevs;
+                    var cutoff = stdev * numberOfStandardDeviations;
                     var startingCount = afvals.Count;
 
                     afvals.RemoveAll(afval => Math.Abs(afval.ValueAsDouble() - mean) > cutoff);
@@ -270,15 +299,12 @@ namespace TimerTriggeredCalc
                     // If no items were removed, output the average and break the loop
                     if (afvals.Count == startingCount)
                     {
-                        context.OutputTag.UpdateValue(new AFValue(mean, triggerTime), AFUpdateOption.Insert);
-                        break;
+                        return mean;
                     }
                 }
                 else
                 {
-                    // If all of the values have been removed, don't write any output values
-                    Console.WriteLine($"All values were eliminated from the set. No output will be written to {context.OutputTag.Name} for {triggerTime}.");
-                    break;
+                    throw new Exception("All values were eliminated. No mean could be calculated");
                 }
             }
         }
