@@ -99,12 +99,15 @@ namespace TimerTriggeredCalc
                 #region step2
                 Console.WriteLine("Resolving AFAttributes to add to the Data Cache...");
 
+                // Determine the list of attributes to add to the data cache. 
+                // This is extracted into a separate function as its calculation specific.
                 var attributeCacheList = DetermineListOfIdealGasLawCalculationAttributes(myAFDB, settings.Contexts);
                 #endregion // step2
 
                 #region step3
                 Console.WriteLine("Creating a data cache for snapshot event updates...");
 
+                // Create the data cache for the input attributes and set the time span for which to retain data
                 _myAFDataCache = new AFDataCache();
                 _dataCaches = _myAFDataCache.Add(attributeCacheList);
                 _myAFDataCache.CacheTimeSpan = new TimeSpan(settings.CacheTimeSpanSeconds * TimeSpan.TicksPerSecond);
@@ -163,6 +166,7 @@ namespace TimerTriggeredCalc
             }
             finally
             {
+                // Manually dispose the necessary object since a 'using' statement is not being used
                 try
                 {
                     if (_aTimer != null)
@@ -205,7 +209,6 @@ namespace TimerTriggeredCalc
         {
             var attributeCacheList = new List<AFAttribute>();
 
-            // Resolve the input and output tag names to PIPoint objects
             foreach (var context in elementContexts)
             {
                 try
@@ -244,7 +247,10 @@ namespace TimerTriggeredCalc
         /// <param name="e">An ElapsedEventArgs object that contains the event data</param>
         private static void TriggerCalculation(object source, ElapsedEventArgs e)
         {
+            // UpdateData fetches updates from the AF Server to update the client-side cache
             _myAFDataCache.UpdateData();
+
+            // Trigger a new round of calculations
             PerformAllCalculations(e.SignalTime);
         }
 
@@ -254,6 +260,7 @@ namespace TimerTriggeredCalc
         /// <param name="triggerTime">The timestamp to perform the calculation against</param>
         private static void PerformAllCalculations(DateTime triggerTime)
         {
+            // Trigger a new calculation for each element
             foreach (var context in _contextList)
             {
                 PerformCalculation(triggerTime, context);
@@ -331,8 +338,11 @@ namespace TimerTriggeredCalc
         /// <returns>The cached, if possible, otherwise non-cached AFData object for the requested attribute</returns>
         private static AFData GetData(AFAttribute attribute)
         {
+            // If the attribute is in the cache, return the local cache instance's AFData object
             if (_myAFDataCache.TryGetItem(attribute, out var data))
                 return data;
+
+            // Otherwise, return the attribute's underlying, non-cached AFData object
             else
                 return attribute.Data;
         }
