@@ -8,6 +8,7 @@ using System.Timers;
 using OSIsoft.AF;
 using OSIsoft.AF.Asset;
 using OSIsoft.AF.Data;
+using OSIsoft.AF.Time;
 using Timer = System.Timers.Timer;
 
 namespace TimerTriggeredCalc
@@ -98,35 +99,7 @@ namespace TimerTriggeredCalc
                 #region step2
                 Console.WriteLine("Resolving AFAttributes to add to the Data Cache...");
 
-                var attributeCacheList = new List<AFAttribute>();
-                
-                // Resolve the input and output tag names to PIPoint objects
-                foreach (var context in settings.Contexts)
-                {
-                    try
-                    {
-                        // Resolve the element from its name
-                        var thisElement = myAFDB.Elements[context];
-
-                        // Make a list of inputs to ensure a partially failed context resolution doesn't add to the data cache
-                        var thisattributeCacheList = new List<AFAttribute>();
-
-                        // Resolve each input attribute
-                        foreach (var input in settings.Inputs)
-                        {
-                            thisattributeCacheList.Add(thisElement.Attributes[input]);
-                        }
-
-                        // If successful, add to the list of resolved attributes to the data cache list
-                        _contextList.Add(thisElement);
-                        attributeCacheList.AddRange(thisattributeCacheList);
-                    }
-                    catch (Exception ex)
-                    {
-                        // If not successful, inform the user and move on to the next pair
-                        Console.WriteLine($"Context {context} will be skipped due to error: {ex.Message}");
-                    }
-                }
+                var attributeCacheList = DetermineListOfIdealGasLawCalculationAttributes(myAFDB, settings.Contexts);
                 #endregion // step2
 
                 #region step3
@@ -190,16 +163,78 @@ namespace TimerTriggeredCalc
             }
             finally
             {
-                // Dispose the timer object then quit
-                if (_aTimer != null)
+                try
                 {
-                    Console.WriteLine("Disposing timer...");
-                    _aTimer.Dispose();
+                    if (_aTimer != null)
+                    {
+                        Console.WriteLine("Disposing timer object...");
+                        _aTimer.Dispose();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to dispose timer object. Error: {ex.Message}");
+                }
+
+                try
+                {
+                    if (_myAFDataCache != null)
+                    {
+                        Console.WriteLine("Disposing AF Data Cache...");
+                        _myAFDataCache.Dispose();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to dispose data cache object. Error: {ex.Message}");
                 }
             }
                 
             Console.WriteLine("Quitting...");
             return _toThrow == null;
+        }
+
+        /// <summary>
+        /// This method determines the AFAttribute objects to add to the data cache. 
+        /// The attributes are hard coded for this calculation, so the logic is abstracted out of the main method
+        /// </summary>
+        /// <param name="myAFDB">The AF Database the calculation is running against</param>
+        /// <param name="elementContexts">The list of element names from the appsettings /param>
+        /// <returns>A list of AFAttribute objects to be added to the data cache</returns>
+        private static List<AFAttribute> DetermineListOfIdealGasLawCalculationAttributes(AFDatabase myAFDB, IList<string> elementContexts)
+        {
+            var attributeCacheList = new List<AFAttribute>();
+
+            // Resolve the input and output tag names to PIPoint objects
+            foreach (var context in elementContexts)
+            {
+                try
+                {
+                    // Resolve the element from its name
+                    var thisElement = myAFDB.Elements[context];
+
+                    // Make a list of inputs to ensure a partially failed context resolution doesn't add to the data cache
+                    var thisattributeCacheList = new List<AFAttribute>
+                    {
+                        // Resolve each input attribute
+                        thisElement.Attributes["Temperature"],
+                        thisElement.Attributes["Pressure"],
+                        thisElement.Attributes["Volume"],
+                        thisElement.Attributes["Moles"],
+                    };
+
+                    // If successful, add the list of resolved attributes to the data cache list and the element to the context list
+                    _contextList.Add(thisElement);
+                    attributeCacheList.AddRange(thisattributeCacheList);
+                }
+                catch (Exception ex)
+                {
+                    // If not successful, inform the user and move on to the next pair
+                    Console.WriteLine($"Context {context} will be skipped due to error: {ex.Message}");
+                }
+            }
+
+            return attributeCacheList;
         }
 
         /// <summary>
@@ -232,21 +267,22 @@ namespace TimerTriggeredCalc
         private static void PerformCalculation(DateTime triggerTime, AFElement context)
         {
             // Configuration
-            var numValues = 100;  // number of values to find the average of
-            var forward = false;
+            var numValues = 100;  // number of values to find the trimmed average of
+            var isForward = false;
             var tempUom = "K";
             var pressUom = "torr";
             var volUom = "L";
             var molUom = "mol";
+            var molRateUom = "mol/s";
             var filterExpression = string.Empty;
             var includeFilteredValues = false;
 
             var numStDevs = 1.75; // number of standard deviations of variance to allow
 
             // Obtain the recent values from the trigger timestamp
-            var afTempVals = context.Attributes["Temperature"].Data.RecordedValuesByCount(triggerTime, numValues, forward, AFBoundaryType.Interpolated, context.PISystem.UOMDatabase.UOMs[tempUom], filterExpression, includeFilteredValues);
-            var afPressVals = context.Attributes["Pressure"].Data.RecordedValuesByCount(triggerTime, numValues, forward, AFBoundaryType.Interpolated, context.PISystem.UOMDatabase.UOMs[pressUom], filterExpression, includeFilteredValues);
-            var afVolumeVal = context.Attributes["Volume"].Data.EndOfStream(context.PISystem.UOMDatabase.UOMs[volUom]);
+            var afTempVals = GetData(context.Attributes["Temperature"]).RecordedValuesByCount(triggerTime, numValues, isForward, AFBoundaryType.Interpolated, context.PISystem.UOMDatabase.UOMs[tempUom], filterExpression, includeFilteredValues);
+            var afPressVals = GetData(context.Attributes["Pressure"]).RecordedValuesByCount(triggerTime, numValues, isForward, AFBoundaryType.Interpolated, context.PISystem.UOMDatabase.UOMs[pressUom], filterExpression, includeFilteredValues);
+            var afVolumeVal = GetData(context.Attributes["Volume"]).EndOfStream(context.PISystem.UOMDatabase.UOMs[volUom]);
 
             // Remove bad values
             afTempVals.RemoveAll(afval => !afval.IsGood);
@@ -258,12 +294,55 @@ namespace TimerTriggeredCalc
 
             // Apply the Ideal Gas Law (PV = nRT) to solve for number of moles
             var gasConstant = 62.363598221529; // units of  L * Torr / (K * mol)
-            var n = meanPressure * afVolumeVal.ValueAsDouble() / (gasConstant * meanTemp); // PV = nRT; n = PV/(RT)
+            var currentMolarValue = meanPressure * afVolumeVal.ValueAsDouble() / (gasConstant * meanTemp); // PV = nRT; n = PV/(RT)
 
-            // write to output attribute.
-            context.Attributes["Moles"].Data.UpdateValue(new AFValue(n, triggerTime, context.PISystem.UOMDatabase.UOMs[molUom]), AFUpdateOption.Insert);
+            // Before writing to the output attribute, find the previous value to determine rate of change
+            AFValue previousMolarValue = null;
+            try
+            {
+                previousMolarValue = GetData(context.Attributes["Moles"]).RecordedValuesByCount(triggerTime, 1, isForward, AFBoundaryType.Inside, context.PISystem.UOMDatabase.UOMs[molUom], filterExpression, includeFilteredValues)[0];
+            }
+            catch
+            {
+                Console.WriteLine($"Previous value not found for {triggerTime}");
+            }
+
+            // Write to output attribute's data cache since we want to use this value in the next section
+            // Using the cache ensures the value is robustly read back and does not have to travel through the Data Archive and back
+            GetData(context.Attributes["Moles"]).UpdateValue(new AFValue(currentMolarValue, triggerTime, context.PISystem.UOMDatabase.UOMs[molUom]), AFUpdateOption.Insert);
+
+            // If there are not yet two values, or one of them was bad, do not calculate the rate
+            if (previousMolarValue == null || !previousMolarValue.IsGood)
+            {
+                Console.WriteLine($"Insufficient value count to determine molar rate of change at {triggerTime}. Skipping this calculation...");
+                return;
+            }
+
+            // Find the rate and write it to the attribute
+            // This attribute is not read by this calculation, so writing to the cache is not necessary
+            var molarRateOfChange = (currentMolarValue - previousMolarValue.ValueAsDouble()) / (new AFTimeSpan(new AFTime(triggerTime) - previousMolarValue.Timestamp).Ticks / TimeSpan.TicksPerSecond);
+            context.Attributes["MolarFlowRate"].Data.UpdateValue(new AFValue(molarRateOfChange, triggerTime, context.PISystem.UOMDatabase.UOMs[molRateUom]), AFUpdateOption.Insert);
         }
 
+        /// <summary>
+        /// This method returns the AFData object from the cache if it exists, otherwise returns the attribute's non-cached AFData object
+        /// </summary>
+        /// <param name="attribute">The AFAttribute whose AFData object is being requested</param>
+        /// <returns>The cached, if possible, otherwise non-cached AFData object for the requested attribute</returns>
+        private static AFData GetData(AFAttribute attribute)
+        {
+            if (_myAFDataCache.TryGetItem(attribute, out var data))
+                return data;
+            else
+                return attribute.Data;
+        }
+
+        /// <summary>
+        /// This method finds the mean of a set of AFValues after removing the outliers in an iterative fashion
+        /// </summary>
+        /// <param name="afvals">List of values to be summarized</param>
+        /// <param name="numberOfStandardDeviations">The cutoff for outliers</param>
+        /// <returns>The mean of the non-outlier values</returns>
         private static double GetTrimmedMean(AFValues afvals, double numberOfStandardDeviations)
         {
             while (true)
