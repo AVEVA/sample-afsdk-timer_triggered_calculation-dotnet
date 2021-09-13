@@ -17,7 +17,6 @@ namespace TimerTriggeredCalc
     {
         private static readonly List<AFElement> _contextList = new List<AFElement>();
         private static AFDataCache _myAFDataCache;
-        private static AFKeyedResults<AFAttribute, AFData> _dataCaches;
         private static Exception _toThrow;
         private static Timer _aTimer;
 
@@ -101,7 +100,7 @@ namespace TimerTriggeredCalc
 
                 // Determine the list of attributes to add to the data cache. 
                 // This is extracted into a separate function as its calculation specific.
-                var attributeCacheList = DetermineListOfIdealGasLawCalculationAttributes(myAFDB, settings.Contexts);
+                var attributeCacheList = DetermineListOfIdealGasLawCalculationAttributes(myAFDB, settings.Contexts, _contextList);
                 #endregion // step2
 
                 #region step3
@@ -109,7 +108,7 @@ namespace TimerTriggeredCalc
 
                 // Create the data cache for the input attributes and set the time span for which to retain data
                 _myAFDataCache = new AFDataCache();
-                _dataCaches = _myAFDataCache.Add(attributeCacheList);
+                _myAFDataCache.Add(attributeCacheList);
                 _myAFDataCache.CacheTimeSpan = new TimeSpan(settings.CacheTimeSpanSeconds * TimeSpan.TicksPerSecond);
 
                 // Create a timer with the specified interval of checking for updates
@@ -199,13 +198,56 @@ namespace TimerTriggeredCalc
         }
 
         /// <summary>
+        /// This method returns the AFData object from the cache if it exists, otherwise returns the attribute's non-cached AFData object
+        /// </summary>
+        /// <param name="attribute">The AFAttribute whose AFData object is being requested</param>
+        /// <returns>The cached, if possible, otherwise non-cached AFData object for the requested attribute</returns>
+        private static AFData GetData(AFAttribute attribute)
+        {
+            // If the attribute is in the cache, return the local cache instance's AFData object
+            if (_myAFDataCache.TryGetItem(attribute, out var data))
+                return data;
+
+            // Otherwise, return the attribute's underlying, non-cached AFData object
+            else
+                return attribute.Data;
+        }
+
+        /// <summary>
+        /// Wrapper function that abstracts the iteration of contexts from the calculation logic itself
+        /// </summary>
+        /// <param name="triggerTime">The timestamp to perform the calculation against</param>
+        private static void PerformAllCalculations(DateTime triggerTime)
+        {
+            // Trigger a new calculation for each element
+            foreach (var context in _contextList)
+            {
+                PerformCalculation(triggerTime, context);
+            }
+        }
+
+        /// <summary>
+        /// This function triggers the calculation to be run against the timestamp of the timer event
+        /// </summary>
+        /// <param name="source">The source of the event</param>
+        /// <param name="e">An ElapsedEventArgs object that contains the event data</param>
+        private static void TriggerCalculation(object source, ElapsedEventArgs e)
+        {
+            // UpdateData fetches updates from the AF Server to update the client-side cache
+            _myAFDataCache.UpdateData();
+
+            // Trigger a new round of calculations
+            PerformAllCalculations(e.SignalTime);
+        }
+
+        /// <summary>
         /// This method determines the AFAttribute objects to add to the data cache. 
         /// The attributes are hard coded for this calculation, so the logic is abstracted out of the main method
         /// </summary>
         /// <param name="myAFDB">The AF Database the calculation is running against</param>
         /// <param name="elementContexts">The list of element names from the appsettings /param>
         /// <returns>A list of AFAttribute objects to be added to the data cache</returns>
-        private static List<AFAttribute> DetermineListOfIdealGasLawCalculationAttributes(AFDatabase myAFDB, IList<string> elementContexts)
+        private static List<AFAttribute> DetermineListOfIdealGasLawCalculationAttributes(AFDatabase myAFDB, IList<string> elementContexts, List<AFElement> contextList)
         {
             var attributeCacheList = new List<AFAttribute>();
 
@@ -227,7 +269,7 @@ namespace TimerTriggeredCalc
                     };
 
                     // If successful, add the list of resolved attributes to the data cache list and the element to the context list
-                    _contextList.Add(thisElement);
+                    contextList.Add(thisElement);
                     attributeCacheList.AddRange(thisattributeCacheList);
                 }
                 catch (Exception ex)
@@ -240,35 +282,9 @@ namespace TimerTriggeredCalc
             return attributeCacheList;
         }
 
-        /// <summary>
-        /// This function triggers the calculation to be run against the timestamp of the timer event
-        /// </summary>
-        /// <param name="source">The source of the event</param>
-        /// <param name="e">An ElapsedEventArgs object that contains the event data</param>
-        private static void TriggerCalculation(object source, ElapsedEventArgs e)
-        {
-            // UpdateData fetches updates from the AF Server to update the client-side cache
-            _myAFDataCache.UpdateData();
-
-            // Trigger a new round of calculations
-            PerformAllCalculations(e.SignalTime);
-        }
 
         /// <summary>
-        /// Wrapper function that abstracts the iteration of contexts from the calculation logic itself
-        /// </summary>
-        /// <param name="triggerTime">The timestamp to perform the calculation against</param>
-        private static void PerformAllCalculations(DateTime triggerTime)
-        {
-            // Trigger a new calculation for each element
-            foreach (var context in _contextList)
-            {
-                PerformCalculation(triggerTime, context);
-            }
-        }
-
-        /// <summary>
-        /// This function performs the calculation and writes the value to the output tag
+        /// This function performs the calculation and writes the value to the output tag.  This needs updating for each new calculation.
         /// <param name="triggerTime">The timestamp to perform the calculation against</param>
         /// <param name="context">The context on which to perform this calculation</param>
         private static void PerformCalculation(DateTime triggerTime, AFElement context)
@@ -332,23 +348,7 @@ namespace TimerTriggeredCalc
         }
 
         /// <summary>
-        /// This method returns the AFData object from the cache if it exists, otherwise returns the attribute's non-cached AFData object
-        /// </summary>
-        /// <param name="attribute">The AFAttribute whose AFData object is being requested</param>
-        /// <returns>The cached, if possible, otherwise non-cached AFData object for the requested attribute</returns>
-        private static AFData GetData(AFAttribute attribute)
-        {
-            // If the attribute is in the cache, return the local cache instance's AFData object
-            if (_myAFDataCache.TryGetItem(attribute, out var data))
-                return data;
-
-            // Otherwise, return the attribute's underlying, non-cached AFData object
-            else
-                return attribute.Data;
-        }
-
-        /// <summary>
-        /// This method finds the mean of a set of AFValues after removing the outliers in an iterative fashion
+        /// This method finds the mean of a set of AFValues after removing the outliers in an iterative fashion.  This needs updating for each new calculation.
         /// </summary>
         /// <param name="afvals">List of values to be summarized</param>
         /// <param name="numberOfStandardDeviations">The cutoff for outliers</param>
