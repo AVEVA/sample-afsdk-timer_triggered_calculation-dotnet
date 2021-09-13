@@ -74,7 +74,7 @@ The sample is configured using the file [appsettings.placeholder.json](TimerTrig
   "TimerIntervalMS": 60000,       // How often to trigger the calculation, in ms
   "DefineOffsetSeconds": true,    // Whether or not to execute the first calculation at a defined offset
   "OffsetSeconds": 0,             // The offset to wait for, in sec.
-  "Contexts": [                   // Array of element names to run the calculation against
+  "Contexts": [                   // Array of element paths to run the calculation against
     "Reactor_1001",
     "Reactor_1002"
   ]
