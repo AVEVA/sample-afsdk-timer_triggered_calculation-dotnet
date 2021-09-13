@@ -282,7 +282,6 @@ namespace TimerTriggeredCalc
             return attributeCacheList;
         }
 
-
         /// <summary>
         /// This function performs the calculation and writes the value to the output tag.  This needs updating for each new calculation.
         /// <param name="triggerTime">The timestamp to perform the calculation against</param>
