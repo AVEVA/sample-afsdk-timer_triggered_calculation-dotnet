@@ -18,10 +18,20 @@ namespace TimerTriggeredCalcTests
         [Fact]
         public void TimerTriggeredCalcTest()
         {
-            double valToWrite = 0.0;
+
             int numValsToWrite = 3; // must be 2 or more to check for proper interval spacing
             var errorThreshold = new TimeSpan(0, 0, 0, 1); // 1s time max error is acceptable due to race condition between sample and test
             var cancellationThreshold = 15; // canceling the timer object is slightly unpredictable, don't fail the test unless it loops far too many times
+
+            var tempValToWrite = 273.0;
+            var pressValToWrite = 2280.0;
+            var volValue = 500;
+            var gasConstant = 62.363598221529; // units of  L * Torr / (K * mol)
+            var expectedMolesOutput = pressValToWrite * volValue / (gasConstant * tempValToWrite);
+            var contextElementList = new List<AFElement>();
+            var templateName = "EventTriggeredSampleTemplate";
+
+            AFDatabase myAFDB = null;
 
             try
             {
@@ -31,105 +41,88 @@ namespace TimerTriggeredCalcTests
                 #endregion // configurationSettings
 
                 #region step1
-                Console.WriteLine("TEST: Resolving PI Data Archive object...");
+                Console.WriteLine("TEST: Resolving AF Server object...");
 
-                PIServer myServer;
+                var myPISystems = new PISystems();
+                PISystem myPISystem;
 
-                if (string.IsNullOrWhiteSpace(settings.PIDataArchiveName))
+                if (string.IsNullOrWhiteSpace(settings.AFServerName))
                 {
-                    myServer = PIServers.GetPIServers().DefaultPIServer;
+                    // Use the default PI Data Archive
+                    myPISystem = myPISystems.DefaultPISystem;
                 }
                 else
                 {
-                    myServer = PIServers.GetPIServers()[settings.PIDataArchiveName];
+                    myPISystem = myPISystems[settings.AFServerName];
                 }
 
-                #endregion // step1
+                Console.WriteLine("Resolving AF Database object...");
+
+                if (string.IsNullOrWhiteSpace(settings.AFDatabaseName))
+                {
+                    // Use the default PI Data Archive
+                    myAFDB = myPISystem.Databases.DefaultDatabase;
+                }
+                else
+                {
+                    myAFDB = myPISystem.Databases[settings.AFDatabaseName];
+                }
+                #endregion // step 1
 
                 #region step2
-                Console.WriteLine("TEST: Resolving input and output PIPoint objects...");
+                Console.WriteLine("TEST: Creating element template to test against...");
 
-                var contextListResolved = new List<CalculationContextResolvedTest>();
+                var eventTrigerredTemplate = myAFDB.ElementTemplates.Add(templateName);
 
-                foreach (var context in settings.CalculationContexts)
+                var tempInputTemplate = eventTrigerredTemplate.AttributeTemplates.Add("Temperature");
+                tempInputTemplate.DefaultUOM = myPISystem.UOMDatabase.UOMs["K"];
+                tempInputTemplate.DataReferencePlugIn = AFDataReference.GetPIPointDataReference(myPISystem);
+                tempInputTemplate.ConfigString = @"\\%Server%\%Element%.%Attribute%;pointtype=Float64;compressing=0";
+
+                var pressInputTemplate = eventTrigerredTemplate.AttributeTemplates.Add("Pressure");
+                pressInputTemplate.DefaultUOM = myPISystem.UOMDatabase.UOMs["torr"];
+                pressInputTemplate.DataReferencePlugIn = AFDataReference.GetPIPointDataReference(myPISystem);
+                pressInputTemplate.ConfigString = @"\\%Server%\%Element%.%Attribute%;pointtype=Float64;compressing=0";
+
+                var volInputTemplate = eventTrigerredTemplate.AttributeTemplates.Add("Volume");
+                volInputTemplate.DefaultUOM = myPISystem.UOMDatabase.UOMs["L"];
+                volInputTemplate.SetValue(volValue, myPISystem.UOMDatabase.UOMs["L"]);
+
+                var molOutputTemplate = eventTrigerredTemplate.AttributeTemplates.Add("Moles");
+                molOutputTemplate.DefaultUOM = myPISystem.UOMDatabase.UOMs["mol"];
+                molOutputTemplate.DataReferencePlugIn = AFDataReference.GetPIPointDataReference(myPISystem);
+                molOutputTemplate.ConfigString = @"\\%Server%\%Element%.%Attribute%;pointtype=Float64;compressing=0";
+
+                var molRateOutputTemplate = eventTrigerredTemplate.AttributeTemplates.Add("MolarFlowRate");
+                molRateOutputTemplate.DefaultUOM = myPISystem.UOMDatabase.UOMs["mol/s"];
+                molRateOutputTemplate.DataReferencePlugIn = AFDataReference.GetPIPointDataReference(myPISystem);
+                molRateOutputTemplate.ConfigString = @"\\%Server%\%Element%.%Attribute%;pointtype=Float64;compressing=0";
+
+                Console.WriteLine("TEST: Creating elements to test against...");
+
+                // create elements from context list
+                foreach (var context in settings.Contexts)
                 {
-                    var thisResolvedContext = new CalculationContextResolvedTest();
-
-                    try
-                    {
-                        // Resolve the input PIPoint object from its name, ensuring it does not already exist
-                        try
-                        {
-                            thisResolvedContext.InputTag = PIPoint.FindPIPoint(myServer, context.InputTagName);
-                            Assert.False(true, "Input tag already exists.");
-                        }
-                        catch (PIPointInvalidException)
-                        {
-                            // If it does not exist, create it
-                            thisResolvedContext.InputTag = myServer.CreatePIPoint(context.InputTagName);
-
-                            // Turn off compression, set to Double
-                            thisResolvedContext.InputTag.SetAttribute(PICommonPointAttributes.Compressing, 0);
-                            thisResolvedContext.InputTag.SetAttribute(PICommonPointAttributes.PointType, PIPointType.Float64);
-                            AFErrors<string> errors = thisResolvedContext.InputTag.SaveAttributes(PICommonPointAttributes.Compressing,
-                                                                                                  PICommonPointAttributes.PointType);
-
-                            // If there were any errors, output them to the console then fail the test
-                            if (errors != null && errors.HasErrors)
-                            {
-                                Console.WriteLine("Errors calling PIPoint.SaveAttributes:");
-                                foreach (var item in errors.Errors)
-                                {
-                                    Console.WriteLine($"  {item.Key}: {item.Value}");
-                                }
-                            }
-
-                            Assert.Null(errors);
-                        }
-
-                        try
-                        {
-                            // Try to resolve the output PIPoint object from its name, ensuring it does not already exist
-                            thisResolvedContext.OutputTag = PIPoint.FindPIPoint(myServer, context.OutputTagName);
-                            Assert.True(false, "Output tag already exists.");
-                        }
-                        catch (PIPointInvalidException)
-                        {
-                            // If it does not exist, let the sample create it. Store the name for easy resolution later
-                            thisResolvedContext.OutputTagName = context.OutputTagName;
-                        }
-
-                        // If successful, add to the list of resolved contexts and the snapshot update subscription list
-                        contextListResolved.Add(thisResolvedContext);
-                    }
-                    catch (Exception ex)
-                    {
-                        // If not successful, fail the test
-                        Assert.True(false, ex.Message);
-                    }
+                    var thisElement = new AFElement(context, eventTrigerredTemplate);
+                    myAFDB.Elements.Add(thisElement);
+                    contextElementList.Add(thisElement);
                 }
 
+                // check in
+                myAFDB.CheckIn(AFCheckedOutMode.ObjectsCheckedOutThisSession);
+
+                // create or update reference
+                AFDataReference.CreateConfig(myAFDB, null);
+
+                Console.WriteLine("TEST: Writing values to input tags...");
+                foreach (var context in contextElementList)
+                {
+                    context.Attributes["Temperature"].Data.UpdateValue(new AFValue(tempValToWrite, DateTime.Now, myPISystem.UOMDatabase.UOMs["K"]), AFUpdateOption.Insert);
+                    context.Attributes["Pressure"].Data.UpdateValue(new AFValue(pressValToWrite, DateTime.Now, myPISystem.UOMDatabase.UOMs["torr"]), AFUpdateOption.Insert);
+                }
                 #endregion // step2
 
                 #region step3
-                Console.WriteLine("TEST: Writing values to input tags...");
-
-                for (int i = 0; i < numValsToWrite; ++i)
-                {
-                    DateTime currentTime = DateTime.Now;
-
-                    foreach (var context in contextListResolved)
-                    {
-                        context.InputTag.UpdateValue(new AFValue(valToWrite, currentTime), AFUpdateOption.Insert);
-                    }
-
-                    // Pause for a second to separate the values
-                    Thread.Sleep(1000);
-                }
-
-                #endregion // step3
-
-                #region step4
                 Console.WriteLine("TEST: Calling main sample...");
 
                 var source = new CancellationTokenSource();
@@ -138,7 +131,10 @@ namespace TimerTriggeredCalcTests
                 // Start the calculation
                 var sampleStart = DateTime.Now;
                 var success = Program.MainLoop(token);
+                #endregion // step3
 
+                #region step4
+                Console.WriteLine("TEST: Pausing until sample should be canceled...");
                 // Calculate the times the sample should be writing to
                 int msUntilOffset = 0;
                 if (settings.DefineOffsetSeconds)
@@ -177,13 +173,10 @@ namespace TimerTriggeredCalcTests
                 #region step5
                 Console.WriteLine("TEST: Checking the output tag values...");
 
-                foreach (var context in contextListResolved)
+                foreach (var context in contextElementList)
                 {
-                    // First, resolve the output tag to ensure the sample created it successfully
-                    context.OutputTag = PIPoint.FindPIPoint(myServer, context.OutputTagName);
-
                     // Obtain the values that should exist, plus 2. The first is 'Pt Created' and the second would represent too many values created
-                    var afvals = context.OutputTag.RecordedValuesByCount(DateTime.Now, numValsToWrite + cancellationThreshold + 2, false, AFBoundaryType.Inside, null, false);
+                    var afvals = context.Attributes["Moles"].Data.RecordedValuesByCount(DateTime.Now, numValsToWrite + cancellationThreshold + 2, false, AFBoundaryType.Inside, myPISystem.UOMDatabase.UOMs["mol"], null, false);
 
                     // Remove the initial 'Pt Created' value from the list
                     afvals.RemoveAll(afval => !afval.IsGood);
@@ -196,7 +189,7 @@ namespace TimerTriggeredCalcTests
                     for (int i = 0; i < afvals.Count; ++i)
                     {
                         // Check that the value is correct
-                        Assert.Equal(valToWrite, afvals[i].ValueAsDouble());
+                        Assert.Equal(expectedMolesOutput, afvals[i].ValueAsDouble());
 
                         // Check that the timestamp is correct, within reason
                         var timeError = new TimeSpan(0);
@@ -215,21 +208,81 @@ namespace TimerTriggeredCalcTests
                     }
                 }
                 #endregion // step5
-
-                #region step6
-                Console.WriteLine("TEST: Cleaning up...");
-
-                foreach (var context in contextListResolved)
-                {
-                    myServer.DeletePIPoint(context.InputTag.Name);
-                    myServer.DeletePIPoint(context.OutputTag.Name);
-                }
-                #endregion // step6
             }
             catch (Exception ex)
             {
                 // If there was an exception along the way, fail the test
                 Assert.True(false, ex.Message);
+            }
+            finally
+            {
+                #region step6
+                Console.WriteLine("TEST: Deleting elements and element templates...");
+                Console.WriteLine("TEST: Cleaning up...");
+
+                foreach (var context in contextElementList)
+                {
+                    // Delete underlying tags
+                    try
+                    {
+                        context.Attributes["Temperature"].PIPoint.Server.DeletePIPoint(context.Attributes["Temperature"].PIPoint.Name);
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"Temperature PI Point not deleted for {context.Name}");
+                    }
+
+                    try
+                    {
+                        context.Attributes["Pressure"].PIPoint.Server.DeletePIPoint(context.Attributes["Pressure"].PIPoint.Name);
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"Pressure PI Point not deleted for {context.Name}");
+                    }
+
+                    try
+                    {
+                        context.Attributes["Moles"].PIPoint.Server.DeletePIPoint(context.Attributes["Moles"].PIPoint.Name);
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"Moles PI Point not deleted for {context.Name}");
+                    }
+
+                    try
+                    {
+                        context.Attributes["MolarFlowRate"].PIPoint.Server.DeletePIPoint(context.Attributes["MolarFlowRate"].PIPoint.Name);
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"MolarFlowRate PI Point not deleted for {context.Name}");
+                    }
+
+                    // Delete element
+                    try
+                    {
+                        myAFDB.Elements.Remove(context);
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"{context.Name} element not deleted.");
+                    }
+                }
+
+                // Delete element template
+                try
+                {
+                    myAFDB.ElementTemplates.Remove(templateName);
+                }
+                catch
+                {
+                    Console.WriteLine($"Element template {templateName} not deleted");
+                }
+
+                // Check in the changes
+                myAFDB.CheckIn(AFCheckedOutMode.ObjectsCheckedOutThisSession);
+                #endregion // step6
             }
         }
     }
