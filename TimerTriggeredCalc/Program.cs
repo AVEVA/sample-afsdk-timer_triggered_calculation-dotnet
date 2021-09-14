@@ -245,7 +245,8 @@ namespace TimerTriggeredCalc
         /// The attributes are hard coded for this calculation, so the logic is abstracted out of the main method
         /// </summary>
         /// <param name="myAFDB">The AF Database the calculation is running against</param>
-        /// <param name="elementContexts">The list of element names from the appsettings /param>
+        /// <param name="elementContexts">The list of element names from the appsettings</param>
+        /// <param name="contextList">The list of resolved elements to iterate each calculation through</param>
         /// <returns>A list of AFAttribute objects to be added to the data cache</returns>
         private static List<AFAttribute> DetermineListOfIdealGasLawCalculationAttributes(AFDatabase myAFDB, IList<string> elementContexts, out List<AFElement> contextList)
         {
