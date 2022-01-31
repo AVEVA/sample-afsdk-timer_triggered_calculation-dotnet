@@ -1,10 +1,14 @@
 # Version History
 
-## 1.0.3 / 2022-02-02
+## 1.0.4 / 2022-02-02
 
 - Updated dependencies
 
-## 1.0.2 / 2022-01-17
+## 1.0.3 / 2022-01-12
+
+- Resolved Polaris scan finding
+
+## 1.0.2 / 2022-01-11
 
 - Updated dependencies
 
