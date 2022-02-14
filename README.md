@@ -1,6 +1,6 @@
 # AF SDK Custom Calculation - Timer Triggered
 
-**Version:** 1.0.4
+**Version:** 1.1.0
 
 [![Build Status](https://dev.azure.com/osieng/engineering/_apis/build/status/product-readiness/PI-System/aveva.sample-afsdk-timer_triggered_calculation-dotnet?branchName=main)](https://dev.azure.com/osieng/engineering/_build/latest?definitionId=3927&branchName=main)
 
@@ -80,7 +80,9 @@ The sample is configured using the file [appsettings.placeholder.json](TimerTrig
   "Contexts": [                   // Array of element paths to run the calculation against
     "Reactor_1001",
     "Reactor_1002"
-  ]
+  ],
+  "Username": "TEST_ONLY",        // Username to connect to the AF Server with for testing purposes only
+  "Password": "TEST_ONLY"         // Password to connect to the AF Server with for testing purposes only
 }
 ```
 
