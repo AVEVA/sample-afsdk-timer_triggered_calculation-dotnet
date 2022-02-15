@@ -43,14 +43,13 @@ namespace TimerTriggeredCalc
         public int OffsetSeconds { get; set; }
 
         /// <summary>
-        /// The username to use when connecting to AF
+        /// The username to use when connecting to AF (TEST ONLY)
         /// An empty string will use the application user
         /// </summary>
         public string Username { get; set; }
 
         /// <summary>
-        /// The password to use when connecting to AF
-        /// An empty string will use the application user
+        /// The password to use when connecting to AF (TEST ONLY)
         /// </summary>
         public string Password { get; set; }
     }
