@@ -204,9 +204,9 @@ namespace TimerTriggeredCalcTests
                         TimeSpan expectedOffset = new TimeSpan((afValues.Count - i - 1) * settings.TimerIntervalMS * TimeSpan.TicksPerMillisecond);
                         DateTime expectedTimeStamp = sampleStart + expectedOffset;
 
-                        TimeSpan timeError = expectedTimeStamp > afValues[i].Timestamp.LocalTime ? 
-                            expectedTimeStamp - afValues[i].Timestamp.LocalTime : 
-                            afValues[i].Timestamp.LocalTime - expectedTimeStamp;
+                        TimeSpan timeError = expectedTimeStamp > afValues[i].Timestamp.LocalTime
+                            ? expectedTimeStamp - afValues[i].Timestamp.LocalTime
+                            : afValues[i].Timestamp.LocalTime - expectedTimeStamp;
 
                         Assert.True(timeError < errorThreshold, $"Output timestamp was of {afValues[i].Timestamp.LocalTime} was further from " +
                             $"expected value of {expectedTimeStamp} by more than acceptable error of {errorThreshold}");
